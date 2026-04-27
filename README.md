@@ -1,7 +1,3 @@
-Siap. Di bawah ini versi README yang sudah diperbarui, lebih detail, dan mencerminkan progress terbaru project kamu: RK Anggota approval flow, Daily Task role-based monitoring, progress berbasis approval, serta next step yang realistis.
-
-Silakan replace isi `README.md` kamu dengan ini.
-
 ````markdown
 # 📊 BPS Monitoring System
 
