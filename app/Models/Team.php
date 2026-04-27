@@ -17,4 +17,9 @@ class Team extends Model
     {
         return $this->belongsToMany(User::class, 'team_members');
     }
+
+    public function setLeaderIdAttribute($value)
+    {
+        $this->attributes['leader_id'] = $value;
+    }
 }

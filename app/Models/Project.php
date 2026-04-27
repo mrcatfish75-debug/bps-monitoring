@@ -8,7 +8,7 @@ class Project extends Model
 {
     protected $fillable = [
         'name',
-        'iku_id',
+        'rk_ketua_id',
         'team_id',
         'leader_id',
         'start_date',
@@ -16,10 +16,7 @@ class Project extends Model
         'status'
     ];
 
-    public function iku()
-    {
-        return $this->belongsTo(Iku::class);
-    }
+
 
     public function team()
     {
@@ -35,4 +32,30 @@ class Project extends Model
     {
         return $this->belongsToMany(User::class, 'project_members');
     }
+
+        public function rkKetua()
+    {
+        return $this->belongsTo(RkKetua::class);
+    }
+
+    public function rkAnggotas()
+    {
+        return $this->hasMany(RkAnggota::class);
+    }
+
+    public function getProgressAttribute()
+{
+    $total = $this->rkAnggotas->count();
+
+    if ($total === 0) {
+        return 0;
+    }
+
+    $approved = $this->rkAnggotas
+        ->where('status', RkAnggota::STATUS_APPROVED)
+        ->count();
+
+    return round(($approved / $total) * 100);
+}
+
 }

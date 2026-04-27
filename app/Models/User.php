@@ -18,10 +18,15 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
-    protected $fillable = [
+        protected $fillable = [
         'name',
+        'nip',
         'email',
         'password',
+        'role',
+        'team_id',
+        'plain_password',
+        'is_default_password'
     ];
 
     /**
@@ -51,4 +56,39 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Team::class, 'team_members');
     }
-}
+
+        public function team()
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    public function isKetua()
+    {
+        return in_array($this->role, ['ketua', 'ketua_tim']);
+    }
+
+    public function isKepala()
+    {
+        return in_array($this->role, ['kepala', 'kepala_bps']);
+    }
+
+    public function isAnggota()
+    {
+        return $this->role === 'anggota';
+    }
+
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+
+    public function scopeTeamAssignable($query)
+    {
+        return $query->whereIn('role', ['ketua_tim', 'anggota']);
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(\App\Models\Notification::class);
+    }
+    }

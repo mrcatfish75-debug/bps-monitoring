@@ -21,17 +21,4 @@ class AppServiceProvider extends ServiceProvider
     {
         //
     }
-
-    protected function authenticated(Request $request, $user)
-    {
-        if ($user->role == 'admin') {
-            return redirect('/admin');
-        } elseif ($user->role == 'kepala_bps') {
-            return redirect('/kepala');
-        } elseif ($user->role == 'ketua_tim') {
-            return redirect('/ketua');
-        } else {
-            return redirect('/anggota');
-        }
-    }
 }

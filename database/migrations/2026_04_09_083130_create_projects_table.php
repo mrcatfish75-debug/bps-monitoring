@@ -15,7 +15,7 @@ return new class extends Migration
         $table->id();
         $table->string('name');
 
-        $table->foreignId('iku_id')->constrained()->cascadeOnDelete();
+        $table->foreignId('rk_ketua_id')->constrained()->cascadeOnDelete();
         $table->foreignId('team_id')->constrained()->cascadeOnDelete();
         $table->foreignId('leader_id')->constrained('users')->cascadeOnDelete();
 
