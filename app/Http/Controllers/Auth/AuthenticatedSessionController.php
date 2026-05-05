@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
-
 class AuthenticatedSessionController extends Controller
 {
     /**
@@ -31,17 +30,33 @@ class AuthenticatedSessionController extends Controller
 
         $user = Auth::user();
 
-        if ($user->role == 'admin') {
-            return redirect('/admin');
-        } elseif ($user->role == 'kepala_bps') {
-            return redirect('/kepala');
-        } elseif ($user->role == 'ketua_tim') {
-            return redirect('/ketua');
-        } else {
-            return redirect('/anggota');
-        }
+        /*
+        |--------------------------------------------------------------------------
+        | Role-based Redirect
+        |--------------------------------------------------------------------------
+        | Role final sistem:
+        | - admin   -> /admin
+        | - kepala  -> /kepala
+        | - ketua   -> /ketua
+        | - anggota -> /anggota
+        |
+        | Catatan:
+        | kepala_bps dan ketua_tim disupport sementara sebagai fallback
+        | jika masih ada data lama di database.
+        */
+        return match ($user->role) {
+            'admin' => redirect()->route('admin.dashboard'),
 
-        return redirect()->intended(route('dashboard', absolute: false));
+            'kepala',
+            'kepala_bps' => redirect()->route('kepala.dashboard'),
+
+            'ketua',
+            'ketua_tim' => redirect()->route('ketua.dashboard'),
+
+            'anggota' => redirect()->route('anggota.dashboard'),
+
+            default => redirect('/'),
+        };
     }
 
     /**

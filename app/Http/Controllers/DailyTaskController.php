@@ -10,18 +10,26 @@ class DailyTaskController extends Controller
 {
     public function index(Request $request)
     {
+        $request->validate([
+            'search' => 'nullable|string|max:255',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'mode' => 'nullable|string|in:mine',
+        ]);
+
         $user = auth()->user();
+
         if (!in_array($user->role, ['admin', 'anggota', 'ketua'])) {
-    abort(403, 'Role tidak diizinkan mengakses Daily Task.');
-}
+            abort(403, 'Role tidak diizinkan mengakses Daily Task.');
+        }
+
+        $isMineMode = $user->role === 'ketua' && $request->mode === 'mine';
 
         /*
         |--------------------------------------------------------------------------
-        | RK Anggota list untuk dropdown create
+        | RK Anggota Dropdown
         |--------------------------------------------------------------------------
-        | Admin melihat semua RK yang masih bisa diisi task.
-        | Anggota hanya melihat RK miliknya.
-        | Ketua tidak perlu create task, tapi tetap aman kalau view butuh variable.
+        | Hanya RK status draft/rejected yang boleh ditambah Daily Task.
         */
         $rkQuery = RkAnggota::with(['project', 'user'])
             ->whereIn('status', [
@@ -29,58 +37,93 @@ class DailyTaskController extends Controller
                 RkAnggota::STATUS_REJECTED,
             ]);
 
-        if ($user->role === 'anggota') {
+        if ($user->role === 'anggota' || $isMineMode) {
             $rkQuery->where('user_id', $user->id);
-        }
-
-        if ($user->role === 'ketua') {
+        } elseif ($user->role === 'ketua') {
             $rkQuery->whereHas('project', function ($q) use ($user) {
                 $q->where('leader_id', $user->id);
             });
         }
 
-        if ($request->search) {
-            $rkQuery->where('description', 'like', '%' . $request->search . '%');
+        if ($request->filled('search')) {
+            $search = $request->search;
+
+            $rkQuery->where(function ($q) use ($search) {
+                $q->where('description', 'like', '%' . $search . '%')
+                    ->orWhereHas('project', function ($sub) use ($search) {
+                        $sub->where('name', 'like', '%' . $search . '%');
+                    })
+                    ->orWhereHas('user', function ($sub) use ($search) {
+                        $sub->where('name', 'like', '%' . $search . '%');
+                    });
+            });
         }
 
-        $rkAnggotas = $rkQuery->limit(50)->get();
+        $rkAnggotas = $rkQuery
+            ->latest()
+            ->limit(50)
+            ->get();
 
         /*
         |--------------------------------------------------------------------------
-        | Daily Task list
+        | Daily Task List
         |--------------------------------------------------------------------------
-        | Admin melihat semua.
-        | Anggota hanya melihat task miliknya.
-        | Ketua melihat task dari project yang dia pimpin.
+        | Admin:
+        | - melihat semua.
+        |
+        | Anggota:
+        | - hanya task dari RK miliknya sendiri.
+        |
+        | Ketua mode normal:
+        | - task dari project yang dia pimpin.
+        |
+        | Ketua mode mine:
+        | - task dari RK miliknya sendiri.
         */
         $taskQuery = DailyTask::with([
             'rkAnggota.project',
             'rkAnggota.user',
         ]);
 
-        if ($user->role === 'anggota') {
+        if ($user->role === 'anggota' || $isMineMode) {
             $taskQuery->whereHas('rkAnggota', function ($q) use ($user) {
                 $q->where('user_id', $user->id);
             });
-        }
-
-        if ($user->role === 'ketua') {
+        } elseif ($user->role === 'ketua') {
             $taskQuery->whereHas('rkAnggota.project', function ($q) use ($user) {
                 $q->where('leader_id', $user->id);
             });
         }
 
-        if ($request->search) {
-            $taskQuery->where(function ($q) use ($request) {
-                $q->where('activity', 'like', '%' . $request->search . '%')
-                    ->orWhere('output', 'like', '%' . $request->search . '%')
-                    ->orWhereHas('rkAnggota', function ($sub) use ($request) {
-                        $sub->where('description', 'like', '%' . $request->search . '%');
+        if ($request->filled('search')) {
+            $search = $request->search;
+
+            $taskQuery->where(function ($q) use ($search) {
+                $q->where('activity', 'like', '%' . $search . '%')
+                    ->orWhere('output', 'like', '%' . $search . '%')
+                    ->orWhere('evidence_url', 'like', '%' . $search . '%')
+                    ->orWhereHas('rkAnggota', function ($sub) use ($search) {
+                        $sub->where('description', 'like', '%' . $search . '%');
+                    })
+                    ->orWhereHas('rkAnggota.project', function ($sub) use ($search) {
+                        $sub->where('name', 'like', '%' . $search . '%');
+                    })
+                    ->orWhereHas('rkAnggota.user', function ($sub) use ($search) {
+                        $sub->where('name', 'like', '%' . $search . '%');
                     });
             });
         }
 
+        if ($request->filled('start_date')) {
+            $taskQuery->whereDate('date', '>=', $request->start_date);
+        }
+
+        if ($request->filled('end_date')) {
+            $taskQuery->whereDate('date', '<=', $request->end_date);
+        }
+
         $tasks = $taskQuery
+            ->latest('date')
             ->latest()
             ->paginate(10)
             ->withQueryString();
@@ -88,12 +131,19 @@ class DailyTaskController extends Controller
         return view('daily_task.index', compact('rkAnggotas', 'tasks'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $user = auth()->user();
-        if ($user->role === 'ketua') {
-    abort(403, 'Ketua hanya dapat memonitor Daily Task.');
-}
+
+        if (!in_array($user->role, ['admin', 'anggota', 'ketua'])) {
+            abort(403, 'Role tidak diizinkan membuat Daily Task.');
+        }
+
+        $isMineMode = $user->role === 'ketua' && $request->mode === 'mine';
+
+        if ($user->role === 'ketua' && !$isMineMode) {
+            abort(403, 'Ketua hanya dapat membuat Daily Task melalui mode Pekerjaan Saya.');
+        }
 
         $query = RkAnggota::with(['project', 'user'])
             ->whereIn('status', [
@@ -101,11 +151,13 @@ class DailyTaskController extends Controller
                 RkAnggota::STATUS_REJECTED,
             ]);
 
-        if ($user->role === 'anggota') {
+        if ($user->role === 'anggota' || $isMineMode) {
             $query->where('user_id', $user->id);
         }
 
-        $rkAnggotas = $query->get();
+        $rkAnggotas = $query
+            ->latest()
+            ->get();
 
         return view('daily_task.create', compact('rkAnggotas'));
     }
@@ -114,7 +166,7 @@ class DailyTaskController extends Controller
     {
         $request->validate([
             'rk_anggota_id' => 'required|exists:rk_anggotas,id',
-            'date' => 'nullable|date',
+            'date' => 'required|date|after_or_equal:today',
             'activity' => 'required|string',
             'output' => 'nullable|string',
             'evidence_url' => 'nullable|url',
@@ -126,23 +178,18 @@ class DailyTaskController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Authorization
+        | Authorization Create
         |--------------------------------------------------------------------------
-        | Admin boleh input untuk siapa pun.
-        | Anggota hanya boleh input untuk RK miliknya.
-        | Ketua tidak boleh input Daily Task.
+        | Admin boleh input semua.
+        | Anggota dan ketua mode pribadi hanya boleh input untuk RK miliknya.
         */
-        if ($user->role === 'anggota' && $rk->user_id !== $user->id) {
-            abort(403, 'Akses ditolak.');
-        }
-
-        if ($user->role === 'ketua') {
-            abort(403, 'Ketua hanya dapat memonitor Daily Task.');
+        if ($user->role !== 'admin' && (int) $rk->user_id !== (int) $user->id) {
+            abort(403, 'Akses ditolak. Kamu hanya boleh membuat Daily Task untuk RK milikmu sendiri.');
         }
 
         /*
         |--------------------------------------------------------------------------
-        | Status lock
+        | Status Lock
         |--------------------------------------------------------------------------
         | Daily Task hanya boleh dibuat saat RK masih draft/rejected.
         */
@@ -155,9 +202,9 @@ class DailyTaskController extends Controller
 
         DailyTask::create([
             'rk_anggota_id' => $rk->id,
-            'date' => $request->date ?? now()->toDateString(),
+            'date' => $request->date,
             'activity' => $request->activity,
-            'output' => $request->output,
+            'output' => $request->output ?? '-',
             'evidence_url' => $request->evidence_url,
             'status' => 'pending',
         ]);
@@ -165,32 +212,41 @@ class DailyTaskController extends Controller
         return back()->with('success', 'Daily Task berhasil dibuat.');
     }
 
-   public function show($id)
-{
-    $task = DailyTask::with([
-        'rkAnggota.project.team',
-        'rkAnggota.project.rkKetua.iku',
-        'rkAnggota.user',
-    ])->findOrFail($id);
+    public function show($id)
+    {
+        $task = DailyTask::with([
+            'rkAnggota.project.team',
+            'rkAnggota.project.rkKetua.iku',
+            'rkAnggota.user',
+        ])->findOrFail($id);
 
-    $this->authorizeViewTask($task);
+        $this->authorizeViewTask($task);
 
-    return response()->json($task);
-}
+        return response()->json($task);
+    }
 
     public function update(Request $request, $id)
     {
         $request->validate([
-            'date' => 'nullable|date',
+            'date' => 'required|date|after_or_equal:today',
             'activity' => 'required|string',
             'output' => 'nullable|string',
             'evidence_url' => 'nullable|url',
         ]);
 
-        $task = DailyTask::with('rkAnggota')->findOrFail($id);
+        $task = DailyTask::with([
+            'rkAnggota.project',
+            'rkAnggota.user',
+        ])->findOrFail($id);
 
         $this->authorizeManageTask($task);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Status Lock
+        |--------------------------------------------------------------------------
+        | Daily Task hanya boleh diubah saat RK masih draft/rejected.
+        */
         if (!in_array($task->rkAnggota->status, [
             RkAnggota::STATUS_DRAFT,
             RkAnggota::STATUS_REJECTED,
@@ -201,7 +257,7 @@ class DailyTaskController extends Controller
         $task->update([
             'date' => $request->date,
             'activity' => $request->activity,
-            'output' => $request->output,
+            'output' => $request->output ?? '-',
             'evidence_url' => $request->evidence_url,
         ]);
 
@@ -210,7 +266,10 @@ class DailyTaskController extends Controller
 
     public function destroy($id)
     {
-        $task = DailyTask::with('rkAnggota')->findOrFail($id);
+        $task = DailyTask::with([
+            'rkAnggota.project',
+            'rkAnggota.user',
+        ])->findOrFail($id);
 
         $this->authorizeManageTask($task);
 
@@ -230,25 +289,31 @@ class DailyTaskController extends Controller
     |--------------------------------------------------------------------------
     | Legacy Daily Task Approval
     |--------------------------------------------------------------------------
-    | Secara flow final, progress tidak lagi bergantung pada approval Daily Task.
-    | Method ini dibiarkan dulu agar route lama tidak rusak.
-    | UI utama tidak perlu lagi menampilkan tombol approve/reject task.
+    | Flow final: approval dilakukan di RK Anggota, bukan Daily Task.
+    |--------------------------------------------------------------------------
     */
     public function approve($id)
-{
-    return back()->with(
-        'error',
-        'Approval Daily Task sudah tidak digunakan. Silakan review dan approve melalui RK Anggota.'
-    );
-}
+    {
+        return back()->with(
+            'error',
+            'Approval Daily Task sudah tidak digunakan. Silakan review dan approve melalui RK Anggota.'
+        );
+    }
 
-public function reject(Request $request, $id)
-{
-    return back()->with(
-        'error',
-        'Reject Daily Task sudah tidak digunakan. Silakan reject melalui RK Anggota.'
-    );
-}
+    public function reject(Request $request, $id)
+    {
+        return back()->with(
+            'error',
+            'Reject Daily Task sudah tidak digunakan. Silakan reject melalui RK Anggota.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authorization Helpers
+    |--------------------------------------------------------------------------
+    */
+
     private function authorizeViewTask(DailyTask $task): void
     {
         $user = auth()->user();
@@ -257,15 +322,30 @@ public function reject(Request $request, $id)
             return;
         }
 
-        if ($user->role === 'anggota' && $task->rkAnggota->user_id === $user->id) {
+        /*
+        |--------------------------------------------------------------------------
+        | Pemilik RK boleh melihat Daily Task miliknya sendiri.
+        |--------------------------------------------------------------------------
+        */
+        if ($task->rkAnggota && (int) $task->rkAnggota->user_id === (int) $user->id) {
             return;
         }
 
-        if ($user->role === 'ketua' && $task->rkAnggota->project->leader_id === $user->id) {
+        /*
+        |--------------------------------------------------------------------------
+        | Ketua project boleh melihat Daily Task dari project yang dia pimpin.
+        |--------------------------------------------------------------------------
+        */
+        if (
+            $user->role === 'ketua' &&
+            $task->rkAnggota &&
+            $task->rkAnggota->project &&
+            (int) $task->rkAnggota->project->leader_id === (int) $user->id
+        ) {
             return;
         }
 
-        abort(403, 'Akses ditolak.');
+        abort(403, 'Akses ditolak. Kamu tidak berhak melihat Daily Task ini.');
     }
 
     private function authorizeManageTask(DailyTask $task): void
@@ -276,10 +356,17 @@ public function reject(Request $request, $id)
             return;
         }
 
-        if ($user->role === 'anggota' && $task->rkAnggota->user_id === $user->id) {
+        /*
+        |--------------------------------------------------------------------------
+        | Manage = create/update/delete.
+        | Pemilik RK boleh manage Daily Task miliknya sendiri.
+        | Ketua project tidak otomatis boleh edit/delete Daily Task anggota.
+        |--------------------------------------------------------------------------
+        */
+        if ($task->rkAnggota && (int) $task->rkAnggota->user_id === (int) $user->id) {
             return;
         }
 
-        abort(403, 'Akses ditolak.');
+        abort(403, 'Akses ditolak. Kamu hanya boleh mengelola Daily Task milikmu sendiri.');
     }
 }

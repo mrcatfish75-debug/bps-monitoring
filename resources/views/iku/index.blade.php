@@ -150,7 +150,7 @@ class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
 <input name="name" placeholder="Nama IKU"
 class="border w-full mb-2 p-2 rounded" required>
 
-<input name="year" value="{{ $year }}"
+<input name="year" placeholder="Tahun" value="{{ $year }}"
 class="border w-full mb-2 p-2 rounded" required>
 
 <input name="satuan" placeholder="Satuan (%, unit, dll)"

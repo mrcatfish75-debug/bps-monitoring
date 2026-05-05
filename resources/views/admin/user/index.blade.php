@@ -300,7 +300,7 @@ Save
 
 <select id="editRole" name="role" class="border w-full mb-2 p-2 rounded">
 <option value="admin">Admin</option>
-<option value="ketua_tim">Ketua</option>
+<option value="ketua">Ketua</option>
 <option value="anggota">Anggota</option>
 </select>
 
