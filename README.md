@@ -1,6 +1,3 @@
-Siap bro. Ini versi README yang sudah jauh lebih lengkap, rapi, dan sesuai kondisi project terakhir: flow Admin, Ketua Tim, Anggota, Daily Task, RK Anggota, Project membership fleksibel, Ketua bisa jadi anggota di project/tim lain, dan Kepala BPS masih jadi next development.
-
-Silakan replace isi `README.md` kamu dengan ini.
 
 ````md
 # 📊 BPS Monitoring System
