@@ -1,1017 +1,595 @@
+# Sistem Monitoring Kinerja BPS Kota Palangka Raya
 
-````md
-# 📊 BPS Monitoring System
+Sistem Monitoring Kinerja BPS Kota Palangka Raya adalah aplikasi web berbasis Laravel yang digunakan untuk membantu proses perencanaan, pembagian, pelaksanaan, pemantauan, dan evaluasi pekerjaan internal berbasis indikator kinerja. Sistem ini dirancang dengan alur kerja berjenjang mulai dari IKU, RK Ketua, Project, RK Anggota, IKI, hingga Daily Task.
 
-BPS Monitoring System adalah aplikasi web berbasis Laravel untuk memantau, mengelola, dan mengevaluasi progres kinerja pegawai di lingkungan Badan Pusat Statistik (BPS). Sistem ini dibangun dengan alur kerja berbasis hierarki kinerja, mulai dari IKU, RK Ketua, Project, RK Anggota, hingga Daily Task.
-
-Aplikasi ini menggunakan Laravel sebagai backend, Blade sebagai templating engine, Tailwind CSS untuk antarmuka, dan MySQL sebagai database utama.
+Aplikasi ini mendukung beberapa role pengguna, yaitu Admin, Kepala, Ketua Tim, dan Anggota. Setiap role memiliki hak akses dan dashboard yang berbeda sesuai kebutuhan operasional dan monitoring.
 
 ---
 
-## 🎯 Tujuan Sistem
+## Gambaran Umum Sistem
 
-Sistem ini dibuat untuk membantu proses monitoring kinerja pegawai secara lebih terstruktur, transparan, dan mudah dievaluasi.
-
-Tujuan utama aplikasi:
-
-- Mengelola pekerjaan berdasarkan struktur kinerja yang jelas.
-- Memetakan IKU ke RK Ketua, Project, RK Anggota, dan Daily Task.
-- Memudahkan Ketua Tim dalam membuat project dan memonitor pekerjaan anggota.
-- Memudahkan Anggota dalam membuat RK pribadi dan mencatat Daily Task.
-- Memberikan dashboard informatif untuk setiap role.
-- Menyediakan dasar monitoring untuk Kepala BPS sebagai viewer/read-only.
-- Meningkatkan transparansi progres kerja antar tim dan pegawai.
-
----
-
-## 🧠 Struktur Hierarki Sistem
-
-Flow utama sistem:
+Sistem ini dibuat untuk mengelola alur kerja kinerja secara bertingkat:
 
 ```text
 IKU
-→ RK Ketua
-→ Project
-→ RK Anggota
-→ Daily Task
-````
-
-Penjelasan:
-
-1. **IKU** adalah Indikator Kinerja Utama yang menjadi target besar organisasi.
-2. **RK Ketua** adalah rencana kerja Ketua Tim yang mengacu pada IKU tertentu.
-3. **Project** adalah pekerjaan turunan dari RK Ketua yang dikelola oleh Ketua Tim.
-4. **RK Anggota** adalah rencana kerja pribadi anggota/pelaksana dalam sebuah project.
-5. **Daily Task** adalah catatan aktivitas harian untuk menyelesaikan RK Anggota.
-
----
-
-## 👥 Role User
-
-Sistem memiliki beberapa role utama:
-
-```text
-Admin
-Kepala BPS
-Ketua Tim
-Anggota
+↓
+RK Ketua
+↓
+Project
+↓
+RK Anggota
+↓
+IKI
+↓
+Daily Task
 ```
 
+Penjelasan singkat:
+
+- **IKU** adalah indikator kinerja utama sebagai level paling atas.
+- **RK Ketua** adalah rencana kinerja ketua tim yang diturunkan dari IKU.
+- **Project** adalah pekerjaan/proyek yang dibuat berdasarkan RK Ketua.
+- **RK Anggota** adalah rencana kerja anggota dalam suatu project.
+- **IKI** adalah unit kerja/indikator individu yang menjadi level utama approval.
+- **Daily Task** adalah catatan aktivitas harian dan bukti pekerjaan yang mendukung IKI.
+
+Approval utama berada pada level **IKI**. Daily Task digunakan sebagai bukti dan proses kerja, sedangkan progress sistem dihitung secara bertingkat dari IKI yang disetujui.
+
 ---
 
-## 🔐 Role & Hak Akses
+## Tujuan Sistem
+
+Sistem ini bertujuan untuk:
+
+- Membantu digitalisasi monitoring kinerja internal.
+- Mempermudah Admin dalam mengelola user, role, tim, IKU, dan data kerja.
+- Membantu Ketua Tim dalam membuat RK Ketua, Project, RK Anggota, dan melakukan review IKI.
+- Membantu Anggota dalam mencatat pekerjaan harian, mengunggah bukti, dan mengajukan IKI.
+- Membantu Kepala dalam melakukan monitoring menyeluruh tanpa mengubah data.
+- Menyediakan dashboard progress berbasis role.
+- Mengurangi risiko pekerjaan tidak termonitor karena seluruh aktivitas tercatat dalam sistem.
+
+---
+
+## Role Pengguna
 
 ### 1. Admin
 
-Admin memiliki akses penuh untuk mengelola data utama sistem.
+Admin memiliki akses pengelolaan penuh terhadap data sistem.
 
-Admin dapat:
+Hak akses utama Admin:
 
-* Mengelola user.
-* Mengelola team.
-* Mengelola IKU.
-* Mengelola RK Ketua.
-* Mengelola project.
-* Mengelola RK Anggota.
-* Mengelola Daily Task.
-* Melihat seluruh data lintas role.
-* Melakukan import data user dan IKU.
-* Melihat dashboard global sistem.
+- Mengelola user.
+- Mengelola role pengguna.
+- Mengelola tim kerja.
+- Import dan kelola IKU.
+- Mengelola RK Ketua.
+- Mengelola Project.
+- Mengelola RK Anggota.
+- Mengelola IKI.
+- Mengelola Daily Task.
+- Melihat seluruh progress sistem.
+- Melakukan reset password user.
+- Import data user.
+- Import data IKU.
+- Melakukan monitoring seluruh data.
 
-Admin digunakan sebagai pengelola utama sistem.
+Admin adalah role utama untuk konfigurasi dan pengelolaan sistem.
 
 ---
 
-### 2. Kepala BPS
+### 2. Kepala
 
-Kepala BPS dirancang sebagai role monitoring/read-only.
+Kepala adalah role monitoring. Role ini digunakan untuk melihat perkembangan kinerja tanpa melakukan perubahan data.
 
-Kepala BPS dapat:
+Hak akses utama Kepala:
 
-* Melihat ringkasan seluruh aktivitas.
-* Melihat progres project.
-* Melihat progres kinerja berdasarkan IKU.
-* Melihat dashboard monitoring.
-* Melihat data tanpa melakukan perubahan.
+- Melihat dashboard monitoring.
+- Melihat data IKU.
+- Melihat data RK Ketua.
+- Melihat data Project.
+- Melihat data RK Anggota.
+- Melihat data IKI.
+- Melihat data Daily Task.
+- Melihat rekap progress seluruh tim.
+- Melakukan monitoring kinerja secara read-only.
 
-Kepala BPS tidak boleh:
-
-* Membuat data.
-* Mengedit data.
-* Menghapus data.
-* Approve/reject RK.
-
-Status saat ini: **laman Kepala BPS menjadi fokus development berikutnya**.
+Kepala tidak memiliki akses create, update, delete, submit, approve, atau reject.
 
 ---
 
 ### 3. Ketua Tim
 
-Ketua Tim memiliki dua konteks kerja:
+Ketua Tim adalah role pengelola pekerjaan tim.
 
-```text
-1. Sebagai Ketua/Reviewer
-2. Sebagai Anggota/Pelaksana di project lain
-```
+Hak akses utama Ketua Tim:
 
-Ini penting karena dalam sistem ini, user dengan role `ketua` tetap bisa menjadi anggota/pelaksana pada project lain.
+- Melihat dashboard Ketua.
+- Mengelola RK Ketua miliknya sendiri.
+- Membuat Project dari RK Ketua.
+- Menambahkan anggota ke Project.
+- Membuat RK Anggota untuk anggota project.
+- Melihat RK Anggota dari project yang dipimpin.
+- Melakukan review IKI anggota.
+- Approve atau reject IKI.
+- Melihat Daily Task sesuai hak akses.
+- Mengelola IKI pribadi jika Ketua juga menjadi anggota pada project lain melalui mode pribadi.
 
-#### Ketua Tim sebagai Ketua/Reviewer
-
-Ketua Tim dapat:
-
-* Membuat RK Ketua.
-* Mengedit RK Ketua miliknya.
-* Melihat detail RK Ketua beserta daftar project terkait.
-* Membuat project dari RK Ketua miliknya.
-* Mengatur anggota project.
-* Mengedit/menghapus project yang dia pimpin.
-* Melihat RK Anggota dari project yang dia pimpin.
-* Approve/reject RK Anggota dari project yang dia pimpin.
-* Memonitor Daily Task anggota pada project yang dia pimpin.
-
-Ketua Tim tidak boleh:
-
-* Mengedit project yang bukan dia pimpin.
-* Menghapus project yang bukan dia pimpin.
-* Approve/reject RK miliknya sendiri.
-* Mengelola Daily Task milik anggota secara langsung.
-* Melihat project yang tidak dia pimpin dan tidak dia ikuti.
-
-#### Ketua Tim sebagai Pelaksana
-
-Ketua Tim juga bisa menjadi anggota project lain.
-
-Dalam konteks ini, Ketua Tim dapat:
-
-* Melihat project yang dia ikuti sebagai anggota.
-* Membuat RK pribadi.
-* Membuat Daily Task pribadi.
-* Submit RK pribadi untuk direview Ketua Tim project tersebut.
-
-Mode ini diakses melalui:
-
-```text
-/ketua/rk-anggota?mode=mine
-/ketua/daily-task?mode=mine
-```
+Ketua Tim bertanggung jawab memastikan pekerjaan anggota berjalan sesuai RK Ketua dan Project yang dibuat.
 
 ---
 
 ### 4. Anggota
 
-Anggota adalah pelaksana pekerjaan dalam project.
+Anggota adalah role pelaksana pekerjaan.
 
-Anggota dapat:
+Hak akses utama Anggota:
 
-* Melihat dashboard pribadi.
-* Melihat project yang dia ikuti.
-* Membuat RK pribadi pada project yang dia ikuti.
-* Membuat lebih dari satu RK dalam satu project.
-* Membuat Daily Task untuk RK miliknya sendiri.
-* Submit RK setelah memiliki minimal satu Daily Task.
-* Melihat status RK: Draft, Submitted, Approved, Rejected.
-* Mengedit RK dan Daily Task selama status RK masih Draft atau Rejected.
+- Melihat dashboard Anggota.
+- Melihat project yang diikuti.
+- Melihat RK Anggota miliknya.
+- Membuat atau mengelola IKI miliknya.
+- Membuat Daily Task.
+- Mengunggah bukti pekerjaan.
+- Submit IKI untuk direview Ketua Tim.
+- Melakukan revisi jika IKI dikembalikan oleh Ketua Tim.
 
-Anggota tidak boleh:
+Anggota berfokus pada pelaksanaan pekerjaan dan pelaporan bukti aktivitas harian.
 
-* Melihat project yang tidak dia ikuti.
-* Melihat RK milik user lain.
-* Melihat Daily Task milik user lain.
-* Membuat project.
-* Mengedit project.
-* Menghapus project.
-* Approve/reject RK.
-* Mengedit RK setelah Submitted atau Approved.
-* Mengedit Daily Task setelah RK Submitted atau Approved.
+---
 
-Flow kerja anggota:
+## Flow Utama Sistem
+
+Alur utama sistem:
 
 ```text
-Project Saya
-→ RK Pribadi Saya
-→ Daily Task Saya
-→ Submit RK
-→ Review Ketua Tim
-→ Approved / Rejected
+Start
+↓
+User Login
+↓
+Sistem Mengecek Role
+↓
+User Masuk Dashboard Sesuai Role
+```
+
+### Flow Admin
+
+```text
+Admin Login
+↓
+Dashboard Admin
+↓
+Kelola User dan Role
+↓
+Kelola Tim Kerja
+↓
+Import / Kelola IKU
+↓
+Kelola RK Ketua
+↓
+Kelola Project
+↓
+Monitoring Seluruh Progress
+```
+
+### Flow Kepala
+
+```text
+Kepala Login
+↓
+Dashboard Kepala
+↓
+Monitoring IKU
+↓
+Monitoring RK Ketua
+↓
+Monitoring Project
+↓
+Monitoring RK Anggota
+↓
+Monitoring IKI dan Daily Task
+↓
+Melihat Rekap Progress
+```
+
+### Flow Ketua Tim
+
+```text
+Ketua Login
+↓
+Dashboard Ketua
+↓
+Pilih IKU / RK Ketua
+↓
+Buat Project
+↓
+Tambah Anggota Project
+↓
+Buat RK Anggota
+↓
+RK Anggota Masuk ke Akun Anggota
+↓
+Menunggu Anggota Submit IKI
+↓
+Review IKI
+↓
+Valid?
+    ↓ Ya
+    Approve IKI
+    ↓
+    Progress Diperbarui
+
+    ↓ Tidak
+    Reject / Kembalikan ke Anggota
+    ↓
+    Anggota Revisi
+```
+
+### Flow Anggota
+
+```text
+Anggota Login
+↓
+Dashboard Anggota
+↓
+Lihat Project / RK Anggota
+↓
+Buat atau Update IKI
+↓
+Input Daily Task
+↓
+Upload Bukti Pekerjaan
+↓
+Submit IKI
+↓
+Menunggu Review Ketua
+↓
+Jika Ditolak: Revisi
+↓
+Jika Disetujui: Progress Naik
+```
+
+### Flow Progress
+
+```text
+IKI Approved
+↓
+Update Progress RK Anggota
+↓
+Update Progress Project
+↓
+Update Progress RK Ketua
+↓
+Update Monitoring IKU
+↓
+Update Dashboard Anggota
+↓
+Update Dashboard Ketua
+↓
+Update Dashboard Kepala
+↓
+Update Dashboard Admin
 ```
 
 ---
 
-## 🏗️ Fitur yang Sudah Dibangun
+## Modul dan Halaman Utama
 
-### 🔐 Authentication
+### Authentication
 
-Fitur auth menggunakan Laravel Breeze.
+Halaman authentication meliputi:
 
-Fitur tersedia:
+- Login.
+- Forgot password.
+- Reset password.
+- Force password change.
+- Logout.
 
-* Login.
-* Register.
-* Logout.
-* Role-based redirect.
-* Middleware role.
-* Redirect dashboard berdasarkan role.
-
-Role redirect:
-
-```text
-admin   → /admin
-ketua   → /ketua
-anggota → /anggota
-kepala  → /kepala
-```
+Register publik dinonaktifkan karena sistem bersifat internal. User dibuat oleh Admin melalui halaman manajemen user.
 
 ---
 
-## 📊 Dashboard
+### Dashboard
 
-### Dashboard Admin
+Dashboard tersedia sesuai role:
 
-Dashboard Admin menampilkan ringkasan global sistem.
+- `/admin`
+- `/kepala`
+- `/ketua`
+- `/anggota`
 
-Informasi yang ditampilkan:
-
-* Total user.
-* Total team.
-* Total IKU.
-* Total project.
-* Total Daily Task.
-* Average progress project.
-* Recent Daily Task.
-* Statistik project per bulan.
-* Statistik task per bulan.
+Setiap dashboard menampilkan informasi yang relevan dengan hak akses masing-masing role.
 
 ---
 
-### Dashboard Ketua Tim
+### User Management
 
-Dashboard Ketua Tim sudah mendukung dua konteks:
+Digunakan oleh Admin untuk mengelola akun pengguna.
 
-```text
-1. Mode Ketua/Reviewer
-2. Pekerjaan Saya
-```
+Fitur utama:
 
-Informasi sebagai Ketua/Reviewer:
-
-* Total project yang dipimpin.
-* Total RK Ketua.
-* Total RK Anggota dari project yang dipimpin.
-* Total Daily Task anggota.
-* Progress rata-rata project.
-* RK Anggota yang menunggu review.
-* Daily Task terbaru dari project yang dipimpin.
-
-Informasi sebagai Pelaksana:
-
-* Project yang dia ikuti sebagai anggota.
-* RK pribadi miliknya.
-* Daily Task pribadi.
-* Status RK pribadi: Draft, Submitted, Approved, Rejected.
+- Melihat daftar user.
+- Menambah user.
+- Mengubah data user.
+- Menghapus user.
+- Reset password user.
+- Import user.
 
 ---
 
-### Dashboard Anggota
+### Team Management
 
-Dashboard Anggota sudah dibuat informatif dan sesuai flow anggota.
+Digunakan untuk mengelola tim kerja.
 
-Informasi yang ditampilkan:
+Fitur utama:
 
-* Total Project Saya.
-* Total RK Pribadi.
-* Total Daily Task.
-* RK yang perlu Daily Task.
-* Progress pribadi.
-* Status RK: Draft, Submitted, Approved, Rejected.
-* Project terbaru yang diikuti.
-* RK pribadi terbaru.
-* Daily Task terbaru.
-* Quick action ke Project Saya, RK Pribadi Saya, dan Daily Task Saya.
-
-Dashboard Anggota hanya menampilkan data milik user login.
-
----
-
-### Dashboard Kepala BPS
-
-Dashboard Kepala BPS saat ini sudah tersedia secara dasar, tetapi masih menjadi fokus pengembangan berikutnya.
-
-Rencana pengembangan Dashboard Kepala BPS:
-
-* Monitoring seluruh IKU.
-* Monitoring progress project.
-* Monitoring kinerja per team.
-* Monitoring RK Ketua.
-* Monitoring RK Anggota.
-* Monitoring Daily Task.
-* View-only detail project.
-* Grafik progress dan statistik kinerja.
-* Filter tahun, IKU, team, dan status.
-
----
-
-## 🎯 IKU Management
-
-IKU adalah target utama yang menjadi dasar RK Ketua.
-
-Fitur IKU:
-
-* List IKU.
-* Create IKU.
-* Edit IKU.
-* Delete IKU.
-* Import IKU.
-* Filter berdasarkan tahun.
-* Search IKU.
-* Relasi dengan RK Ketua.
-
-Struktur umum IKU:
-
-```text
-IKU
-- id
-- name
-- year
-- target/value fields
-```
-
----
-
-## 👥 Team Management
-
-Team digunakan untuk mengelompokkan Ketua Tim dan konteks IKU/tim kerja.
-
-Fitur Team:
-
-* List team.
-* Create team.
-* Edit team.
-* Delete team.
-* Assign Ketua Tim.
-* View detail team.
-* Melihat IKU/RK Ketua/project terkait team.
-
-Catatan penting:
-
-Jumlah anggota team tidak lagi menjadi sumber utama dalam project. Membership project sekarang fleksibel berdasarkan tabel `project_members`.
-
-Dengan kata lain:
-
-```text
-Team = struktur unit kerja / konteks tim
-Project Members = anggota aktual yang mengerjakan project
-```
-
-Ketua Tim dapat menjadi anggota di project/tim lain jika dimasukkan ke `project_members`.
-
----
-
-## 📌 RK Ketua
-
-RK Ketua adalah rencana kerja milik Ketua Tim yang diturunkan dari IKU.
-
-Fitur RK Ketua:
-
-* List RK Ketua.
-* Create RK Ketua.
-* Edit RK Ketua.
-* Delete RK Ketua.
-* View detail RK Ketua dalam modal.
-* Melihat IKU terkait.
-* Melihat team terkait.
-* Melihat daftar project dari RK Ketua.
-* Melihat progress rata-rata project.
-* Search/filter RK Ketua.
-
-Aturan akses RK Ketua:
-
-Admin:
-
-* Bisa melihat dan mengelola seluruh RK Ketua.
-
-Ketua Tim:
-
-* Hanya bisa mengelola RK Ketua miliknya sendiri.
-
-View RK Ketua sekarang tidak langsung redirect ke laman project, tetapi membuka modal detail yang menampilkan:
-
-* IKU.
-* Team.
-* Ketua.
-* Deskripsi RK Ketua.
-* Jumlah project.
-* Progress rata-rata.
-* Daftar project terkait.
-* Tombol menuju laman project.
-
----
-
-## 📁 Project Management
-
-Project adalah turunan dari RK Ketua.
-
-Fitur Project:
-
-* List project.
-* Create project.
-* Edit project.
-* Delete project.
-* View detail project.
-* Assign anggota project.
-* Search/filter project dengan AJAX.
-* Filter berdasarkan tahun.
-* Filter berdasarkan team.
-* Filter berdasarkan RK Ketua.
-* Search instan tanpa tombol filter.
-* Progress project.
-* Export project untuk admin.
-
-Aturan akses Project:
-
-Admin:
-
-* Bisa mengelola semua project.
-
-Ketua Tim:
-
-* Bisa membuat project dari RK Ketua miliknya.
-* Bisa mengedit/menghapus project yang dia pimpin.
-* Bisa melihat project yang dia pimpin.
-* Bisa melihat project yang dia ikuti sebagai anggota.
-
-Anggota:
-
-* Hanya bisa melihat project yang dia ikuti.
-* Tidak bisa create/edit/delete project.
-
-Project membership memakai tabel:
-
-```text
-project_members
-```
-
-Bukan lagi hanya berdasarkan `team_members`.
-
-Hal ini memungkinkan:
-
-* Anggota dari role `anggota` masuk project.
-* User role `ketua` juga bisa menjadi anggota/pelaksana di project lain.
-* Anggota project berbeda-beda untuk setiap project.
-* Satu team bisa memiliki banyak project dengan anggota berbeda.
-
----
-
-## 📝 RK Anggota / RK Pribadi
-
-RK Anggota adalah rencana kerja pribadi user dalam sebuah project.
-
-Fitur RK Anggota:
-
-* List RK Anggota.
-* Create RK Anggota.
-* Edit RK Anggota.
-* Delete RK Anggota.
-* View detail RK Anggota.
-* Submit RK.
-* Approve RK.
-* Reject RK.
-* Catatan penolakan.
-* Search/filter RK Anggota.
-* AJAX instant filter tanpa reload halaman.
-* Pagination AJAX.
-* Progress berdasarkan Daily Task.
-* Menampilkan Daily Task pendukung.
-
-Aturan RK Anggota:
-
-Admin:
-
-* Bisa melihat semua RK Anggota.
-* Bisa membuat/mengedit/menghapus RK Anggota.
-* Bisa approve/reject jika dibutuhkan.
-
-Ketua mode reviewer:
-
-* Bisa melihat RK Anggota dari project yang dia pimpin.
-* Bisa approve/reject RK Anggota dari project yang dia pimpin.
-* Tidak boleh approve/reject RK miliknya sendiri.
-
-Ketua mode mine:
-
-* Bisa membuat RK pribadi.
-* Bisa mengedit/menghapus RK pribadi selama Draft/Rejected.
-* Bisa submit RK pribadi setelah punya Daily Task.
-
-Anggota:
-
-* Bisa membuat RK pribadi.
-* Bisa membuat lebih dari satu RK dalam project yang sama.
-* Bisa mengedit/menghapus RK selama Draft/Rejected.
-* Bisa submit RK setelah minimal punya satu Daily Task.
-* Tidak bisa approve/reject.
-
-Status RK Anggota:
-
-```text
-draft
-submitted
-approved
-rejected
-```
-
-Flow status:
-
-```text
-Draft
-→ Submitted
-→ Approved
-
-Draft
-→ Submitted
-→ Rejected
-→ Draft/Rejected dapat diperbaiki
-→ Submitted ulang
-```
-
-Aturan penting:
-
-* RK Draft bisa diedit.
-* RK Rejected bisa diedit.
-* RK Submitted tidak bisa diedit.
-* RK Approved tidak bisa diedit.
-* RK hanya bisa submit jika sudah memiliki minimal satu Daily Task.
-* RK Rejected dapat diperbaiki dan disubmit ulang.
-
----
-
-## ✅ Daily Task
-
-Daily Task adalah catatan progres/aktivitas harian untuk menyelesaikan RK Anggota.
-
-Fitur Daily Task:
-
-* List Daily Task.
-* Create Daily Task.
-* Edit Daily Task.
-* Delete Daily Task.
-* View detail Daily Task.
-* Link bukti kerja.
-* Filter tanggal.
-* Search.
-* Modal create/edit/view.
-* Read-only setelah RK Submitted/Approved.
-
-Field utama Daily Task:
-
-* RK Anggota.
-* Tanggal pelaksanaan.
-* Aktivitas.
-* Link bukti kerja.
-* Created at.
-* Updated at.
-
-Catatan:
-
-Field `output` masih dipertahankan sebagai legacy compatibility, tetapi UI utama sekarang fokus pada:
-
-```text
-activity
-evidence_url
-date
-```
-
-Aturan Daily Task:
-
-Admin:
-
-* Bisa mengelola Daily Task.
-
-Anggota:
-
-* Hanya bisa melihat dan mengelola Daily Task miliknya sendiri.
-* Daily Task hanya bisa dibuat untuk RK miliknya.
-* Daily Task hanya bisa dibuat jika RK masih Draft atau Rejected.
-* Daily Task hanya bisa diedit/dihapus jika RK masih Draft atau Rejected.
-
-Ketua:
-
-* Dalam mode reviewer, Ketua hanya monitoring Daily Task anggota dari project yang dia pimpin.
-* Dalam mode mine, Ketua bisa membuat Daily Task pribadi untuk RK miliknya sendiri.
-
-Aturan tanggal:
-
-```text
-Tanggal Daily Task tidak boleh sebelum hari ini.
-Tanggal boleh hari ini atau setelahnya.
-```
-
-Approval Daily Task sudah tidak digunakan. Approval dilakukan pada level RK Anggota.
-
----
-
-## 🔎 Search & Filter
-
-Beberapa halaman sudah menggunakan pencarian/filter instan.
-
-### Project
-
-Filter Project:
-
-* Tahun.
-* Team.
-* RK Ketua.
-* Keyword search.
-
-Search Project sudah menggunakan AJAX instan:
-
-* Tidak perlu klik tombol Filter.
-* Data tabel langsung berubah.
-* View/Edit/Delete tetap mengikuti role permission.
-* Pagination lama disembunyikan saat hasil AJAX tampil.
-
-### RK Anggota
-
-Filter RK Anggota:
-
-* Project.
-* User/Anggota untuk admin dan ketua reviewer.
-* Keyword search.
-
-Search RK Anggota menggunakan AJAX instan:
-
-* Tidak perlu klik tombol Filter.
-* Mengambil ulang HTML halaman yang sama.
-* Replace tbody dan pagination.
-* Tetap memakai permission dari controller.
-* Mode `mine` tetap aman.
-
-### Daily Task
-
-Filter Daily Task:
-
-* Search aktivitas/RK/project/user/link bukti.
-* Start date.
-* End date.
-
-Daily Task masih menggunakan filter GET biasa, tetapi sudah mendukung pencarian dan filter tanggal.
-
----
-
-## 🔔 Notification
-
-Sistem sudah memiliki menu notification.
-
-Fitur yang tersedia:
-
-* List notification.
-* Unread count.
-* Mark as read.
-* Mark all as read.
-* Badge unread notification di topbar/sidebar.
-
----
-
-## 🧭 Layout & UI/UX
-
-UI menggunakan:
-
-* Blade.
-* Tailwind CSS.
-* Modal-based CRUD.
-* AJAX fetch untuk detail modal.
-* Vue 3 CDN untuk drawer/sidebar interaktif.
-* Lucide Icons untuk icon menu.
-* Responsive layout.
-
-Sidebar terbaru:
-
-* Tidak selalu tampil permanen.
-* Muncul sebagai drawer/popup setelah klik tombol menu.
-* Bisa ditutup dengan tombol X.
-* Bisa ditutup dengan overlay.
-* Bisa ditutup dengan tombol menu toggle.
-* Menu anggota sudah menampilkan Project Saya.
-* Icon menu menggunakan Lucide, bukan emoji.
-
-Menu anggota:
-
-```text
-Dashboard
-Project Saya
-RK Pribadi Saya
-Daily Task Saya
-Notifications
-```
-
-Menu Ketua Tim:
-
-```text
-Dashboard
-
-Mode Ketua Tim:
-- RK Ketua
-- Project Tim
-- Review RK Anggota
-- Monitoring Daily Task
-
-Pekerjaan Saya:
-- RK Pribadi Saya
-- Daily Task Saya
-
-Notifications
-```
-
----
-
-## ⚙️ Tech Stack
-
-Backend:
-
-* Laravel 12
-* PHP 8+
-* MySQL
-* Eloquent ORM
-* Laravel Middleware
-* Laravel Breeze Authentication
-
-Frontend:
-
-* Blade Template
-* Tailwind CSS
-* JavaScript Fetch API
-* Vue 3 CDN
-* Lucide Icons CDN
-* Vite
-
-Tools:
-
-* Composer
-* NPM
-* Laravel Artisan
-
----
-
-## 🧩 Core Database Design
-
-Tabel utama:
-
-```text
-users
-teams
-team_members
-ikus
-rk_ketuas
-projects
-project_members
-rk_anggotas
-daily_tasks
-notifications
-```
-
----
-
-## 🗃️ Ringkasan Relasi Database
-
-### User
-
-User memiliki role:
-
-```text
-admin
-kepala
-ketua
-anggota
-```
-
-Relasi penting:
-
-```text
-User hasMany RkKetua
-User hasMany RkAnggota
-User belongsToMany Project melalui project_members
-```
-
----
-
-### Team
-
-Team adalah struktur unit kerja.
-
-Relasi:
-
-```text
-Team belongsTo User sebagai leader
-Team hasMany RkKetua
-Team hasMany Project
-Team belongsToMany User melalui team_members
-```
-
-Catatan:
-
-`team_members` bukan sumber utama anggota project. Anggota project ditentukan oleh `project_members`.
+- Membuat tim.
+- Menentukan ketua tim.
+- Mengubah data tim.
+- Menghapus tim.
+- Melihat relasi tim dengan user.
 
 ---
 
 ### IKU
 
-Relasi:
+IKU adalah level utama kinerja.
 
-```text
-IKU hasMany RkKetua
-```
+Fitur utama:
+
+- Menampilkan daftar IKU.
+- Menambah IKU.
+- Mengubah IKU.
+- Menghapus IKU.
+- Import IKU dari Excel.
+- Search IKU.
+- Monitoring IKU.
+
+IKU menjadi dasar pembuatan RK Ketua.
 
 ---
 
 ### RK Ketua
 
-Relasi:
+RK Ketua adalah rencana kinerja milik Ketua Tim yang diturunkan dari IKU.
 
-```text
-RkKetua belongsTo IKU
-RkKetua belongsTo Team
-RkKetua belongsTo User sebagai ketua
-RkKetua hasMany Project
-```
+Fitur utama:
+
+- Menampilkan RK Ketua.
+- Membuat RK Ketua.
+- Mengubah RK Ketua.
+- Menghapus RK Ketua jika belum memiliki project.
+- Melihat detail RK Ketua.
+- Search RK Ketua.
+- Monitoring progress RK Ketua.
+- Template picker RK Ketua dari data Excel yang sudah diimport.
+
+RK Ketua menjadi dasar pembuatan Project.
+
+---
+
+### Template RK Ketua
+
+Sistem mendukung template RK Ketua untuk mempercepat pengisian rencana kinerja.
+
+Fitur utama:
+
+- Import template RK Ketua dari Excel.
+- Menyimpan template ke database.
+- Menampilkan template picker di form tambah RK Ketua.
+- User tetap dapat mengetik manual walaupun template tersedia.
+
+Template ini tidak membuat RK Ketua otomatis. Template hanya membantu mengisi deskripsi RK Ketua.
 
 ---
 
 ### Project
 
-Relasi:
+Project dibuat berdasarkan RK Ketua.
 
-```text
-Project belongsTo Team
-Project belongsTo User sebagai leader
-Project belongsTo RkKetua
-Project belongsToMany User sebagai members melalui project_members
-Project hasMany RkAnggota
-```
+Fitur utama:
+
+- Menampilkan daftar project.
+- Membuat project.
+- Mengubah project.
+- Menghapus project.
+- Melihat detail project.
+- Menambahkan anggota project.
+- Melihat progress project.
+- Export project.
+- Search project.
+
+Project menjadi wadah kerja bagi anggota dan dasar pembuatan RK Anggota.
 
 ---
 
 ### RK Anggota
 
-Relasi:
+RK Anggota adalah rencana kerja anggota dalam suatu Project.
 
-```text
-RkAnggota belongsTo Project
-RkAnggota belongsTo User
-RkAnggota hasMany DailyTask
-RkAnggota belongsTo User sebagai approver
-```
+Fitur utama:
+
+- Menampilkan RK Anggota.
+- Membuat RK Anggota.
+- Mengubah RK Anggota.
+- Menghapus RK Anggota sesuai hak akses.
+- Melihat detail RK Anggota.
+- Legacy route submit/approve/reject masih dipertahankan agar flow lama tidak rusak.
+- Progress RK Anggota dihitung dari IKI.
+
+Approval utama tidak lagi berada di RK Anggota, tetapi pada level IKI.
+
+---
+
+### IKI
+
+IKI adalah unit approval utama dalam sistem.
+
+Fitur utama:
+
+- Menampilkan daftar IKI.
+- Membuat IKI.
+- Mengubah IKI.
+- Menghapus IKI sesuai hak akses.
+- Submit IKI.
+- Review IKI oleh Ketua.
+- Approve IKI.
+- Reject IKI.
+- Melihat status IKI.
+- Menampilkan bukti dan Daily Task terkait.
+
+Status IKI digunakan untuk menghitung progress RK Anggota, Project, dan RK Ketua.
 
 ---
 
 ### Daily Task
 
-Relasi:
+Daily Task adalah catatan aktivitas harian yang mendukung IKI.
+
+Fitur utama:
+
+- Menampilkan Daily Task.
+- Membuat Daily Task.
+- Mengubah Daily Task.
+- Menghapus Daily Task sesuai hak akses.
+- Menghubungkan Daily Task ke IKI.
+- Upload bukti pekerjaan.
+- Melihat aktivitas harian anggota.
+
+Daily Task tidak langsung menjadi approval utama, tetapi menjadi bukti dan pendukung IKI.
+
+---
+
+### Notification
+
+Sistem memiliki fitur notifikasi untuk membantu pengguna mengetahui perubahan status.
+
+Fitur utama:
+
+- Melihat daftar notifikasi.
+- Melihat jumlah notifikasi belum dibaca.
+- Tandai satu notifikasi sebagai dibaca.
+- Tandai semua notifikasi sebagai dibaca.
+
+Notifikasi digunakan untuk mendukung proses submit, review, approve, dan reject.
+
+---
+
+### Calendar Events
+
+Sistem menyediakan endpoint calendar events untuk menampilkan agenda atau event terkait dashboard.
+
+---
+
+## Struktur Route Utama
+
+Contoh struktur route:
 
 ```text
-DailyTask belongsTo RkAnggota
+/
+login
+forgot-password
+reset-password
+force-change-password
+
+/admin
+/admin/users
+/admin/team
+/admin/iku
+/admin/rk-ketua
+/admin/project
+/admin/rk-anggota
+/admin/iki
+/admin/daily-task
+/admin/stats
+
+/kepala
+/kepala/iku
+/kepala/rk-ketua
+/kepala/project
+/kepala/rk-anggota
+/kepala/iki
+/kepala/daily-task
+
+/ketua
+/ketua/rk-ketua
+/ketua/project
+/ketua/rk-anggota
+/ketua/iki
+/ketua/daily-task
+
+/anggota
+/anggota/project
+/anggota/rk-anggota
+/anggota/iki
+/anggota/daily-task
+
+/notification
+/calendar/events
 ```
 
 ---
 
-## 🔐 Security & Authorization Rules
+## Keamanan Sistem
 
-Sistem menggunakan kombinasi:
+Beberapa prinsip keamanan yang digunakan:
 
-* Middleware auth.
-* Middleware role.
-* Scope query berdasarkan role.
-* Authorization manual di controller.
-* Ownership check.
-* Project membership check.
-* Project leader check.
-* Status lock.
-
-Contoh aturan penting:
-
-* Anggota hanya melihat project yang dia ikuti.
-* Anggota hanya melihat RK miliknya sendiri.
-* Anggota hanya melihat Daily Task miliknya sendiri.
-* Ketua hanya review RK Anggota dari project yang dia pimpin.
-* Ketua tidak boleh approve RK miliknya sendiri.
-* Ketua bisa menjadi anggota project lain.
-* Daily Task tidak bisa diubah setelah RK Submitted/Approved.
-* RK tidak bisa diubah setelah Submitted/Approved.
-* Project hanya bisa diedit oleh admin atau ketua yang memimpin project tersebut.
+- Sistem menggunakan authentication Laravel.
+- Route utama dilindungi middleware `auth`.
+- Setiap role memiliki middleware role masing-masing.
+- Kepala hanya memiliki akses monitoring/read-only.
+- Register publik dinonaktifkan.
+- User dibuat oleh Admin.
+- Forgot password diberi rate limit.
+- Login diberi rate limit.
+- Route search dan endpoint tertentu diberi pembatasan akses.
+- Logout menggunakan method POST.
+- Validasi request dilakukan pada controller.
+- Pembatasan ownership dilakukan pada controller sesuai role.
+- Force password change tersedia untuk user dengan password sementara/default.
+- CSRF protection aktif melalui Laravel.
+- Blade menggunakan escaping default `{{ }}` untuk mengurangi risiko XSS.
 
 ---
 
-## 🚧 Progress Saat Ini
+## Teknologi yang Digunakan
 
-Status development saat ini:
+Project ini menggunakan:
 
-```text
-✅ Authentication
-✅ Role-based redirect
-✅ Role middleware
-✅ Dashboard Admin
-✅ Dashboard Ketua Tim
-✅ Dashboard Anggota
-✅ IKU Management
-✅ Team Management
-✅ RK Ketua Management
-✅ Project Management
-✅ Project Member Assignment
-✅ RK Anggota Management
-✅ RK Anggota Approval/Reject
-✅ Daily Task Management
-✅ Notification System
-✅ AJAX Project Filter
-✅ AJAX RK Anggota Filter
-✅ Responsive Sidebar Drawer
-🔄 Dashboard Kepala BPS / Monitoring Kepala
-```
+- Laravel
+- PHP
+- MySQL
+- Blade Template
+- Tailwind CSS
+- Vite
+- Laravel Breeze
+- Maatwebsite Excel
+- JavaScript
+- Composer
+- NPM
 
 ---
 
-## 🚀 Next Development
+## Persyaratan Sistem
 
-Fokus development berikutnya:
+Disarankan menggunakan environment berikut:
 
-### 1. Laman Kepala BPS
-
-Target:
-
-* Dashboard monitoring global.
-* Monitoring IKU.
-* Monitoring Team.
-* Monitoring Project.
-* Monitoring RK Ketua.
-* Monitoring RK Anggota.
-* Monitoring Daily Task.
-* Grafik progress.
-* Filter tahun.
-* Filter team.
-* Filter IKU.
-* View detail read-only.
-
-### 2. Analytics & Reporting
-
-Rencana fitur:
-
-* Grafik progres per IKU.
-* Grafik progres per team.
-* Grafik jumlah project per bulan.
-* Grafik Daily Task per bulan.
-* Export laporan.
-* Summary performa pegawai.
-
-### 3. UI/UX Final Polish
-
-Rencana:
-
-* Konsistensi semua modal.
-* Konsistensi empty state.
-* Konsistensi AJAX search.
-* Loading state lebih halus.
-* Notification UX.
-* Mobile responsiveness.
-
-### 4. Hardening
-
-Rencana:
-
-* Policy/Gate Laravel.
-* Form Request validation.
-* Unit/feature tests.
-* Seeders role demo.
-* Audit log aktivitas.
-* Better error handling.
+- PHP 8.2 atau lebih baru
+- Composer
+- Node.js dan NPM
+- MySQL/MariaDB
+- Laravel 11/12
+- Web server lokal seperti Laravel Herd, Laragon, XAMPP, atau Valet
 
 ---
 
-## 📌 Important Business Rules
-
-Beberapa aturan bisnis utama:
-
-1. Ketua Tim bisa menjadi anggota/pelaksana di project lain.
-2. Role `ketua` tidak selalu berarti reviewer dalam semua konteks.
-3. Reviewer ditentukan oleh `projects.leader_id`.
-4. Pelaksana project ditentukan oleh `project_members`.
-5. Team hanya struktur kerja, bukan sumber tunggal anggota project.
-6. Anggota project bersifat fleksibel per project.
-7. Satu anggota bisa memiliki lebih dari satu RK Anggota dalam satu project.
-8. RK Anggota bisa memiliki banyak Daily Task.
-9. Daily Task adalah bukti proses kerja.
-10. Approval dilakukan di level RK Anggota, bukan Daily Task.
-11. RK hanya bisa submit setelah memiliki minimal satu Daily Task.
-12. Daily Task hanya bisa dibuat saat RK Draft/Rejected.
-13. Data Submitted/Approved bersifat read-only untuk pelaksana.
-14. Kepala BPS adalah read-only monitoring role.
-
----
-
-## 📌 Cara Menjalankan Project
+## Instalasi Project
 
 Clone repository:
 
 ```bash
-git clone https://github.com/mrcatfish75-debug/bps-monitoring.git
-cd bps-monitoring
+git clone https://github.com/username/nama-repository.git
+cd nama-repository
 ```
 
 Install dependency PHP:
@@ -1026,7 +604,7 @@ Install dependency frontend:
 npm install
 ```
 
-Copy environment file:
+Copy file environment:
 
 ```bash
 cp .env.example .env
@@ -1041,7 +619,7 @@ php artisan key:generate
 Atur konfigurasi database di `.env`:
 
 ```env
-DB_DATABASE=bps_monitoring
+DB_DATABASE=nama_database
 DB_USERNAME=root
 DB_PASSWORD=
 ```
@@ -1052,19 +630,25 @@ Jalankan migration:
 php artisan migrate
 ```
 
-Opsional jika tersedia seeder:
+Jalankan seeder jika tersedia:
 
 ```bash
 php artisan db:seed
 ```
 
-Jalankan Vite:
+Buat symbolic link storage:
 
 ```bash
-npm run dev
+php artisan storage:link
 ```
 
-Jalankan Laravel server:
+Build frontend:
+
+```bash
+npm run build
+```
+
+Jalankan server lokal:
 
 ```bash
 php artisan serve
@@ -1078,178 +662,126 @@ http://127.0.0.1:8000
 
 ---
 
-## 🧹 Useful Artisan Commands
+## Perintah Development
 
-Clear cache:
+Menjalankan Laravel server:
+
+```bash
+php artisan serve
+```
+
+Menjalankan Vite development:
+
+```bash
+npm run dev
+```
+
+Membersihkan cache:
 
 ```bash
 php artisan optimize:clear
 php artisan route:clear
 php artisan view:clear
-php artisan cache:clear
+php artisan config:clear
 ```
 
-Cek route:
+Melihat route:
 
 ```bash
 php artisan route:list
 ```
 
-Cek route tertentu:
+---
 
-```bash
-php artisan route:list | findstr "project"
-php artisan route:list | findstr "rk-anggota"
-php artisan route:list | findstr "daily-task"
+## Catatan Akun
+
+Sistem ini bersifat internal. Register publik dimatikan. Akun dibuat oleh Admin melalui menu Users atau melalui fitur import user.
+
+Jika tersedia seeder user, gunakan akun default dari seeder project. Jika belum tersedia, buat user admin melalui seeder, tinker, atau import user.
+
+---
+
+## Rekomendasi Production
+
+Sebelum deploy ke server production, pastikan:
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+```
+
+Checklist production:
+
+- Gunakan HTTPS.
+- Gunakan password database yang kuat.
+- Jangan commit file `.env`.
+- Jangan commit file upload/storage pribadi.
+- Jalankan `php artisan config:cache`.
+- Jalankan `php artisan route:cache` jika route sudah stabil.
+- Pastikan permission folder `storage` dan `bootstrap/cache` benar.
+- Pastikan register publik tetap nonaktif.
+- Pastikan backup database berjalan rutin.
+- Pastikan upload file memiliki validasi ukuran dan tipe file.
+- Pastikan akses storage publik hanya untuk file yang memang boleh dilihat user.
+- Pastikan setiap controller membatasi ownership data sesuai role.
+
+---
+
+## Status Project
+
+Project ini sudah berada pada tahap selesai secara fungsional untuk kebutuhan monitoring kinerja berbasis role.
+
+Fitur utama yang sudah tersedia:
+
+- Authentication dan role-based access.
+- Dashboard per role.
+- Manajemen user.
+- Manajemen tim kerja.
+- Import dan kelola IKU.
+- RK Ketua.
+- Template picker RK Ketua.
+- Project.
+- RK Anggota.
+- IKI sebagai approval utama.
+- Daily Task sebagai bukti kerja.
+- Monitoring progress bertingkat.
+- Notification.
+- Mode monitoring Kepala.
+- Register publik dinonaktifkan.
+- Basic route security hardening.
+
+---
+
+## Ringkasan Alur Data
+
+```text
+Admin membuat/menyiapkan user, tim, dan IKU
+↓
+Admin/Ketua membuat RK Ketua dari IKU
+↓
+Ketua membuat Project dari RK Ketua
+↓
+Ketua menambahkan anggota project
+↓
+Ketua membuat RK Anggota
+↓
+Anggota membuat IKI dan Daily Task
+↓
+Anggota submit IKI
+↓
+Ketua review IKI
+↓
+Jika ditolak, anggota revisi
+↓
+Jika disetujui, progress sistem diperbarui
+↓
+Kepala dan Admin melakukan monitoring
 ```
 
 ---
 
-## 📂 Struktur Folder Penting
+## Lisensi
 
-```text
-app/
-├── Http/
-│   ├── Controllers/
-│   │   ├── DashboardController.php
-│   │   ├── IkuController.php
-│   │   ├── TeamController.php
-│   │   ├── ProjectController.php
-│   │   ├── RkKetuaController.php
-│   │   ├── RkAnggotaController.php
-│   │   ├── DailyTaskController.php
-│   │   └── NotificationController.php
-│   └── Middleware/
-│       └── RoleMiddleware.php
-│
-├── Models/
-│   ├── User.php
-│   ├── Team.php
-│   ├── Iku.php
-│   ├── Project.php
-│   ├── RkKetua.php
-│   ├── RkAnggota.php
-│   ├── DailyTask.php
-│   └── Notification.php
-│
-resources/
-├── views/
-│   ├── dashboard/
-│   │   ├── admin.blade.php
-│   │   ├── ketua.blade.php
-│   │   ├── anggota.blade.php
-│   │   └── kepala.blade.php
-│   ├── iku/
-│   ├── team/
-│   ├── project/
-│   ├── rk_ketua/
-│   ├── rk_anggota/
-│   ├── daily_task/
-│   ├── notification/
-│   └── layouts/
-│       └── app.blade.php
-│
-routes/
-└── web.php
-```
+Project ini dibuat untuk kebutuhan internal pengembangan sistem monitoring kinerja BPS Kota Palangka Raya.
 
----
-
-## 🧪 Recommended Testing Flow
-
-### Test Admin
-
-```text
-Login admin
-→ Kelola user
-→ Kelola team
-→ Kelola IKU
-→ Buat RK Ketua
-→ Buat project
-→ Assign anggota project
-→ Cek RK Anggota
-→ Cek Daily Task
-```
-
-### Test Ketua Tim
-
-```text
-Login ketua
-→ Buat RK Ketua
-→ Buat project
-→ Pilih anggota project
-→ Review RK Anggota submitted
-→ Approve/reject RK
-→ Monitoring Daily Task
-```
-
-### Test Ketua sebagai Anggota
-
-```text
-Login ketua
-→ Masuk RK Pribadi Saya
-→ Buat RK pribadi dari project yang dia ikuti
-→ Buat Daily Task Saya
-→ Submit RK
-```
-
-### Test Anggota
-
-```text
-Login anggota
-→ Buka Project Saya
-→ View project
-→ Buat RK Pribadi Saya
-→ Buat Daily Task Saya
-→ Submit RK
-→ Tunggu review Ketua Tim
-```
-
-### Test Kepala BPS
-
-```text
-Login kepala
-→ Buka dashboard kepala
-→ Monitoring data read-only
-```
-
----
-
-## ⚠️ Development Notes
-
-Project ini masih dalam tahap development aktif.
-
-Fokus utama saat ini adalah menyelesaikan role Kepala BPS agar dapat menjadi dashboard monitoring read-only yang lengkap.
-
-Beberapa bagian yang masih dapat dikembangkan:
-
-* Policy/Gate Laravel.
-* Seeder user demo.
-* Export laporan.
-* Dashboard Kepala BPS.
-* Testing otomatis.
-* Audit log.
-* Notifikasi yang lebih detail.
-* Grafik analytics yang lebih lengkap.
-
----
-
-## 👨‍💻 Developer
-
-Created by:
-
-**mrcatfish75-debug**
-
-Repository:
-
-```text
-https://github.com/mrcatfish75-debug/bps-monitoring
-```
-
----
-
-## 📄 License
-
-Project ini dibuat untuk kebutuhan pengembangan sistem monitoring kinerja BPS. Sesuaikan lisensi penggunaan berdasarkan kebutuhan organisasi.
-
-````
+Sesuaikan bagian lisensi ini dengan kebijakan repository atau instansi masing-masing.
