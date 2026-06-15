@@ -6,6 +6,7 @@ use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +31,20 @@ class LoginRequest extends FormRequest
         return [
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            'g-recaptcha-response' => ['required', 'string'],
+        ];
+    }
+
+    /**
+     * Custom validation messages.
+     */
+    public function messages(): array
+    {
+        return [
+            'email.required' => 'Email wajib diisi.',
+            'email.email' => 'Format email tidak valid.',
+            'password.required' => 'Password wajib diisi.',
+            'g-recaptcha-response.required' => 'Verifikasi CAPTCHA wajib dicentang.',
         ];
     }
 
@@ -42,15 +57,55 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
+        $this->verifyRecaptcha();
+
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
+                'email' => 'Email atau password tidak sesuai.',
             ]);
         }
 
         RateLimiter::clear($this->throttleKey());
+    }
+
+    /**
+     * Verify Google reCAPTCHA response.
+     *
+     * @throws ValidationException
+     */
+    private function verifyRecaptcha(): void
+    {
+        $secretKey = config('services.recaptcha.secret_key');
+
+        if (! $secretKey) {
+            throw ValidationException::withMessages([
+                'g-recaptcha-response' => 'Konfigurasi CAPTCHA belum lengkap. Hubungi Admin.',
+            ]);
+        }
+
+        $response = Http::asForm()
+            ->timeout(10)
+            ->post('https://www.google.com/recaptcha/api/siteverify', [
+                'secret' => $secretKey,
+                'response' => $this->input('g-recaptcha-response'),
+                'remoteip' => $this->ip(),
+            ]);
+
+        if (! $response->ok()) {
+            throw ValidationException::withMessages([
+                'g-recaptcha-response' => 'Verifikasi CAPTCHA gagal. Coba beberapa saat lagi.',
+            ]);
+        }
+
+        $result = $response->json();
+
+        if (! ($result['success'] ?? false)) {
+            throw ValidationException::withMessages([
+                'g-recaptcha-response' => 'Verifikasi CAPTCHA tidak valid. Silakan centang ulang CAPTCHA.',
+            ]);
+        }
     }
 
     /**
@@ -69,10 +124,7 @@ class LoginRequest extends FormRequest
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
+            'email' => "Terlalu banyak percobaan login. Coba lagi dalam {$seconds} detik.",
         ]);
     }
 

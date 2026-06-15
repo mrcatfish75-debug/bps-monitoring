@@ -5,11 +5,12 @@
     $role = $authUser->role;
 
     $projectBasePath = match ($role) {
-    'admin' => '/admin/project',
-    'ketua' => '/ketua/project',
-    'anggota' => '/anggota/project',
-    default => '/project',
-};
+        'admin' => '/admin/project',
+        'ketua' => '/ketua/project',
+        'anggota' => '/anggota/project',
+        'kepala' => '/kepala/project',
+        default => '/project',
+    };
 
     /*
     |--------------------------------------------------------------------------
@@ -25,8 +26,13 @@
     |
     | Anggota:
     | - hanya view project yang dia ikuti.
+    |
+    | Kepala:
+    | - monitoring semua project.
+    | - tidak bisa add/edit/delete.
     */
-    $canCreateProject = in_array($role, ['admin', 'ketua']);
+    $canCreateProject = in_array($role, ['admin', 'ketua'], true);
+    $isKepala = $role === 'kepala';
 @endphp
 
 <div class="bg-white p-6 rounded-xl shadow">
@@ -54,7 +60,7 @@
     <!-- ================= FILTER ================= -->
 <form id="projectFilterForm"
     method="GET"
-    class="grid grid-cols-1 md:grid-cols-5 gap-2 mb-4"
+    class="grid grid-cols-1 md:grid-cols-6 gap-2 mb-4"
     onsubmit="return false;">
 
     <!-- TAHUN -->
@@ -105,11 +111,17 @@
         autocomplete="off"
         class="border px-3 py-2 rounded">
 
-    <!-- RESET -->
+    <button type="button"
+        onclick="triggerSearch()"
+        class="bg-gray-800 text-white text-center px-4 py-2 rounded hover:bg-gray-700">
+        Filter
+    </button>
+
     <a href="{{ url($projectBasePath) }}"
-        class="bg-gray-200 text-gray-700 text-center px-4 py-2 rounded hover:bg-gray-300">
+        class="bg-gray-200 text-center px-4 py-2 rounded hover:bg-gray-300">
         Reset
     </a>
+
 </form>
 
 <div id="projectSearchInfo"
@@ -136,25 +148,30 @@
                         </a>
                     </th>
 
-                    <!-- ANGGOTA -->
-                    <th class="py-2 px-3 text-center">
-                        Anggota
-                    </th>
+                    <!-- TIM -->
+                <th class="py-2 px-3">
+                    Tim
+                </th>
 
-                    <!-- RK -->
-                    <th class="py-2 px-3">
-                        Rencana Ketua
-                    </th>
+                <!-- KETUA PROJECT -->
+                <th class="py-2 px-3">
+                    Ketua Project
+                </th>
 
-                    <!-- PROGRESS -->
-                    <th class="py-2 px-3 text-center">
-                        Progress
-                    </th>
+                <!-- ANGGOTA -->
+                <th class="py-2 px-3 text-center">
+                    Anggota
+                </th>
 
-                    <!-- AKSI -->
-                    <th class="py-2 px-3 text-center">
-                        Aksi
-                    </th>
+                <!-- RK KETUA -->
+                <th class="py-2 px-3">
+                    RK Ketua
+                </th>
+
+                <!-- PROGRESS -->
+                <th class="py-2 px-3 text-center">
+                    Progress
+                </th>
                 </tr>
             </thead>
 
@@ -176,12 +193,22 @@
                         {{ $p->name }}
                     </td>
 
+                    <!-- TIM -->
+                    <td class="py-2 px-3">
+                        {{ $p->team->name ?? '-' }}
+                    </td>
+
+                    <!-- KETUA PROJECT -->
+                    <td class="py-2 px-3">
+                        {{ $p->leader->name ?? '-' }}
+                    </td>
+
                     <!-- JUMLAH ANGGOTA -->
                     <td class="py-2 px-3 text-center">
                         {{ $p->members->count() }}
                     </td>
 
-                    <!-- RK -->
+                    <!-- RK KETUA -->
                     <td class="py-2 px-3">
                         {{ $p->rkKetua->description ?? '-' }}
                     </td>
@@ -195,7 +222,6 @@
                         </div>
                         <small>{{ $p->progress }}%</small>
                     </td>
-
                     <!-- AKSI -->
                     <td class="py-2 px-3 text-center space-x-2">
 
@@ -230,7 +256,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" class="text-center py-4 text-gray-500">
+                    <td colspan="7" class="text-center py-4 text-gray-500">
                         Tidak ada data
                     </td>
                 </tr>
@@ -357,7 +383,7 @@
                 </div>
 
                 <p class="text-xs text-gray-400 mt-2">
-                    Role ketua dan anggota bisa dipilih sebagai anggota project.
+                    Role ketua dan anggota bisa dipilih sebagai anggota project. Ketua project otomatis tidak ditampilkan sebagai anggota project-nya sendiri.
                 </p>
             </div>
 
@@ -381,6 +407,7 @@
 @endif
 
 <!-- ================= MODAL EDIT ================= -->
+ @if($canCreateProject)
 <div id="modalEdit"
     class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
 
@@ -516,7 +543,7 @@
         </form>
     </div>
 </div>
-
+@endif
 <!-- ================= MODAL VIEW ================= -->
 <div id="modalView"
     class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -530,7 +557,7 @@
                 </h3>
 
                 <p class="text-sm text-gray-500 mt-1">
-                    Detail RK Ketua, tim, ketua project, anggota project, dan progress.
+                    Detail project, progress, RK Anggota, IKI, Daily Task, dan anggota project.
                 </p>
             </div>
 
@@ -558,6 +585,14 @@
 <script>
 const PROJECT_BASE_PATH = @json($projectBasePath);
 const CURRENT_ROLE = @json($role);
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -581,7 +616,11 @@ function closeCreateModal(){
 }
 
 function closeEditModal(){
-    document.getElementById('modalEdit').classList.add('hidden');
+    const modal = document.getElementById('modalEdit');
+
+    if (modal) {
+        modal.classList.add('hidden');
+    }
 }
 
 function closeViewModal(){
@@ -769,7 +808,9 @@ let editMembersData = [];
 let editSelectedMemberIds = [];
 
 function openEditModal(id){
-
+    if (!['admin', 'ketua'].includes(CURRENT_ROLE)) {
+        return;
+    }
     fetch(`${PROJECT_BASE_PATH}/${id}`)
         .then(res => {
             if (!res.ok) {
@@ -932,13 +973,14 @@ function openViewModal(id){
         })
         .then(data => {
             const members = data.members ?? [];
+            const rkAnggotas = data.rk_anggotas ?? data.rkAnggotas ?? [];
 
             const membersHtml = members.length
                 ? members.map(m => `
                     <div class="p-3 border-b last:border-b-0 flex justify-between gap-3">
                         <div>
-                            <div class="font-medium text-gray-800">${m.name ?? '-'}</div>
-                            <div class="text-xs text-gray-400">${m.nip ?? '-'}</div>
+                            <div class="font-medium text-gray-800">${escapeHtml(m.name ?? '-')}</div>
+                            <div class="text-xs text-gray-400">${escapeHtml(m.nip ?? '-')}</div>
                         </div>
                         <span class="text-xs px-2 py-1 rounded h-fit ${m.role === 'ketua' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}">
                             ${m.role === 'ketua' ? 'Ketua' : 'Anggota'}
@@ -951,26 +993,195 @@ function openViewModal(id){
                     </div>
                 `;
 
+            const rkAnggotasHtml = rkAnggotas.length
+                ? rkAnggotas.map(rk => {
+                    const ikis = rk.ikis ?? [];
+
+                    const ikiSummary = `
+                        <div class="text-xs text-gray-500 mt-1">
+                            IKI: ${rk.approved_iki_count ?? 0}/${rk.iki_count ?? 0} approved
+                            · Daily Task: ${rk.daily_task_count ?? 0}
+                        </div>
+                    `;
+
+                    const ikisHtml = ikis.length
+                        ? `
+                            <div class="mt-3 space-y-2">
+                                ${ikis.map(iki => {
+                                    const statusClass = {
+                                        draft: 'bg-gray-100 text-gray-700',
+                                        submitted: 'bg-blue-100 text-blue-700',
+                                        approved: 'bg-green-100 text-green-700',
+                                        rejected: 'bg-red-100 text-red-700',
+                                    }[iki.status] ?? 'bg-gray-100 text-gray-700';
+
+                                    const evidenceHtml = iki.final_evidence
+                                        ? `<a href="${escapeHtml(iki.final_evidence)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">Buka Bukti</a>`
+                                        : '<span class="text-gray-400">Belum ada bukti</span>';
+
+                                    return `
+                                        <div class="rounded-lg border bg-gray-50 p-3">
+                                            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
+                                                <div>
+                                                    <div class="font-medium text-gray-900">
+                                                        ${escapeHtml(iki.description ?? '-')}
+                                                    </div>
+                                                    <div class="text-xs text-gray-500 mt-1">
+                                                        Target: ${escapeHtml(iki.target ?? '-')} ${escapeHtml(iki.unit ?? '')}
+                                                    </div>
+                                                    <div class="text-xs text-gray-500 mt-1">
+                                                        Daily Task: ${iki.daily_task_count ?? 0}
+                                                    </div>
+                                                </div>
+
+                                                <div class="text-left md:text-right shrink-0">
+                                                    <span class="inline-block px-2 py-1 rounded text-xs font-semibold ${statusClass}">
+                                                        ${escapeHtml(iki.status_label ?? iki.status ?? '-')}
+                                                    </span>
+                                                    <div class="text-xs text-gray-500 mt-2">
+                                                        Progress: ${iki.progress ?? 0}%
+                                                    </div>
+                                                    <div class="text-xs mt-2">
+                                                        ${evidenceHtml}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        `
+                        : `
+                            <div class="mt-3 rounded-lg bg-yellow-50 border border-yellow-100 p-3 text-sm text-yellow-700">
+                                Belum ada IKI untuk RK ini.
+                            </div>
+                        `;
+
+                    return `
+                        <div class="p-4 border-b last:border-b-0 bg-white">
+                            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                                <div>
+                                    <div class="font-semibold text-gray-900">
+                                        ${escapeHtml(rk.description ?? '-')}
+                                    </div>
+                                    <div class="text-xs text-gray-500 mt-1">
+                                        Anggota: ${escapeHtml(rk.user?.name ?? '-')}
+                                    </div>
+                                    ${ikiSummary}
+                                </div>
+
+                                <div class="shrink-0 min-w-[140px]">
+                                    <div class="w-full bg-gray-200 rounded h-2">
+                                        <div class="bg-green-500 h-2 rounded"
+                                            style="width: ${rk.progress ?? 0}%">
+                                        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-700 mt-1">
+                                        Progress RK: ${rk.progress ?? 0}%
+                                    </div>
+                                </div>
+                            </div>
+
+                            ${ikisHtml}
+                        </div>
+                    `;
+                }).join('')
+                : `
+                    <div class="p-4 text-sm text-gray-400 text-center">
+                        Belum ada RK Anggota pada project ini.
+                    </div>
+                `;
+
+            const progress = data.progress ?? 0;
+
             document.getElementById('viewContent').innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="p-4 rounded-xl border bg-gray-50">
                         <div class="text-xs text-gray-500 mb-1">Nama Proyek</div>
-                        <div class="font-semibold">${data.name ?? '-'}</div>
+                        <div class="font-semibold">${escapeHtml(data.name ?? '-')}</div>
                     </div>
 
                     <div class="p-4 rounded-xl border bg-gray-50">
                         <div class="text-xs text-gray-500 mb-1">Tim</div>
-                        <div class="font-semibold">${data.team?.name ?? '-'}</div>
+                        <div class="font-semibold">${escapeHtml(data.team?.name ?? '-')}</div>
                     </div>
 
                     <div class="p-4 rounded-xl border bg-gray-50">
                         <div class="text-xs text-gray-500 mb-1">RK Ketua</div>
-                        <div class="font-semibold">${data.rk_ketua?.description ?? '-'}</div>
+                        <div class="font-semibold">${escapeHtml(data.rk_ketua?.description ?? '-')}</div>
                     </div>
 
                     <div class="p-4 rounded-xl border bg-gray-50">
                         <div class="text-xs text-gray-500 mb-1">Ketua Project</div>
-                        <div class="font-semibold">${data.leader?.name ?? '-'}</div>
+                        <div class="font-semibold">${escapeHtml(data.leader?.name ?? '-')}</div>
+                    </div>
+                </div>
+
+                <div class="mt-5 p-4 rounded-xl border bg-green-50 border-green-100">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-semibold text-green-700">
+                                Progress Project
+                            </div>
+                            <div class="text-xs text-green-700 mt-1">
+                                Progress dihitung dari progress RK Anggota yang bersumber dari IKI.
+                            </div>
+                        </div>
+
+                        <div class="md:w-64">
+                            <div class="w-full bg-green-100 rounded h-3">
+                                <div class="bg-green-500 h-3 rounded"
+                                    style="width: ${progress}%">
+                                </div>
+                            </div>
+                            <div class="text-right text-sm font-bold text-green-700 mt-1">
+                                ${progress}%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5 grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div class="p-4 rounded-xl border bg-purple-50 border-purple-100">
+                        <div class="text-xs text-purple-600 font-semibold mb-1">RK Anggota</div>
+                        <div class="text-2xl font-bold text-purple-700">
+                            ${data.total_rk_count ?? 0}
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl border bg-green-50 border-green-100">
+                        <div class="text-xs text-green-600 font-semibold mb-1">RK Selesai</div>
+                        <div class="text-2xl font-bold text-green-700">
+                            ${data.completed_rk_count ?? 0}
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl border bg-blue-50 border-blue-100">
+                        <div class="text-xs text-blue-600 font-semibold mb-1">Total IKI</div>
+                        <div class="text-2xl font-bold text-blue-700">
+                            ${data.total_iki_count ?? 0}
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl border bg-emerald-50 border-emerald-100">
+                        <div class="text-xs text-emerald-600 font-semibold mb-1">IKI Approved</div>
+                        <div class="text-2xl font-bold text-emerald-700">
+                            ${data.approved_iki_count ?? 0}
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl border bg-gray-50">
+                        <div class="text-xs text-gray-600 font-semibold mb-1">Daily Task</div>
+                        <div class="text-2xl font-bold text-gray-700">
+                            ${data.daily_task_count ?? 0}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5">
+                    <h4 class="font-semibold mb-2">RK Anggota & IKI</h4>
+                    <div class="border rounded-xl overflow-hidden">
+                        ${rkAnggotasHtml}
                     </div>
                 </div>
 
@@ -1005,6 +1216,12 @@ function triggerSearch() {
     }
 }
 
+document.querySelectorAll('.project-filter').forEach((filter) => {
+    filter.addEventListener('change', function () {
+        triggerSearch();
+    });
+});
+
 const searchInput = document.getElementById('searchInput');
 
 if (searchInput) {
@@ -1028,12 +1245,12 @@ if (searchInput) {
 
                     if (!data || data.length === 0) {
                         tbody.innerHTML = `
-                            <tr>
-                                <td colspan="5" class="text-center py-4 text-gray-500">
-                                    Tidak ada data
-                                </td>
-                            </tr>
-                        `;
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-gray-500">
+                                Tidak ada data
+                            </td>
+                        </tr>
+                    `;
                         return;
                     }
 
@@ -1065,6 +1282,14 @@ if (searchInput) {
 
                                 <td class="py-2 px-3 font-medium">
                                     ${p.name ?? '-'}
+                                </td>
+
+                                <td class="py-2 px-3">
+                                    ${p.team?.name ?? '-'}
+                                </td>
+
+                                <td class="py-2 px-3">
+                                    ${p.leader?.name ?? '-'}
                                 </td>
 
                                 <td class="py-2 px-3 text-center">

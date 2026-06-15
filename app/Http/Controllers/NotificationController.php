@@ -2,29 +2,67 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Notification;
+use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    /**
+     * NOTIFICATION PAGE
+     */
+    public function index(Request $request)
+    {
+        $request->validate([
+            'filter' => 'nullable|string|in:all,unread,read',
+        ]);
+
+        $filter = $request->filter ?? 'all';
+
+        $query = Notification::where('user_id', auth()->id())
+            ->latest();
+
+        if ($filter === 'unread') {
+            $query->where('is_read', false);
+        }
+
+        if ($filter === 'read') {
+            $query->where('is_read', true);
+        }
+
+        $notifications = $query
+            ->paginate(10)
+            ->withQueryString();
+
+        $unreadCount = Notification::where('user_id', auth()->id())
+            ->where('is_read', false)
+            ->count();
+
+        $totalCount = Notification::where('user_id', auth()->id())
+            ->count();
+
+        return view('notification.index', compact(
+            'notifications',
+            'unreadCount',
+            'totalCount',
+            'filter'
+        ));
+    }
+
     /**
      * MARK 1 NOTIFICATION AS READ
      */
     public function markAsRead($id)
     {
-        $notif = Notification::findOrFail($id);
+        $notification = Notification::where('user_id', auth()->id())
+            ->findOrFail($id);
 
-        // 🔒 SECURITY CHECK
-        if ($notif->user_id !== auth()->id()) {
-            abort(403, 'Akses Ditolak');
+        $notification->markAsRead();
+
+        if ($notification->url) {
+            return redirect($notification->url);
         }
 
-        // 🔥 UPDATE STATUS
-        $notif->update([
-            'is_read' => true
-        ]);
-
-        return back()->with('success', 'Notifikasi dibaca');
+        return back()->with('success', 'Notifikasi sudah dibaca.');
     }
 
     /**
@@ -34,25 +72,16 @@ class NotificationController extends Controller
     {
         Notification::where('user_id', auth()->id())
             ->where('is_read', false)
-            ->update(['is_read' => true]);
+            ->update([
+                'is_read' => true,
+                'read_at' => now(),
+            ]);
 
-        return back()->with('success', 'Semua notifikasi dibaca');
+        return back()->with('success', 'Semua notifikasi sudah dibaca.');
     }
 
     /**
-     * GET USER NOTIFICATIONS (untuk nanti Vue / AJAX)
-     */
-    public function index()
-    {
-        $notifications = Notification::where('user_id', auth()->id())
-            ->latest()
-            ->get();
-
-        return response()->json($notifications);
-    }
-
-    /**
-     * GET UNREAD COUNT (badge navbar)
+     * GET UNREAD COUNT FOR BADGE
      */
     public function unreadCount()
     {
@@ -61,7 +90,7 @@ class NotificationController extends Controller
             ->count();
 
         return response()->json([
-            'unread' => $count
+            'unread' => $count,
         ]);
     }
 }

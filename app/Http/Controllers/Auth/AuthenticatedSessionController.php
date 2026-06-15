@@ -24,39 +24,117 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): RedirectResponse
     {
+        /*
+        |--------------------------------------------------------------------------
+        | Authenticate User
+        |--------------------------------------------------------------------------
+        | LoginRequest menangani validasi credential, throttle, reCAPTCHA,
+        | dan pesan error.
+        |--------------------------------------------------------------------------
+        */
         $request->authenticate();
 
+        /*
+        |--------------------------------------------------------------------------
+        | Session Regeneration
+        |--------------------------------------------------------------------------
+        | Wajib setelah login untuk mencegah session fixation.
+        |--------------------------------------------------------------------------
+        */
         $request->session()->regenerate();
 
-        $user = Auth::user();
+        /*
+        |--------------------------------------------------------------------------
+        | Resolve Authenticated User
+        |--------------------------------------------------------------------------
+        | Ambil user dari guard web, lalu refresh dari database agar field terbaru
+        | seperti is_default_password terbaca akurat setelah reset password.
+        |--------------------------------------------------------------------------
+        */
+        $user = Auth::guard('web')->user();
+
+        if (!$user) {
+            Auth::guard('web')->logout();
+
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('login')
+                ->with('error', 'Sesi login tidak valid. Silakan login ulang.');
+        }
+
+        $user->refresh();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Role Normalization
+        |--------------------------------------------------------------------------
+        | Role final:
+        | - admin
+        | - kepala
+        | - ketua
+        | - anggota
+        |
+        | Fallback role lama tetap didukung sementara:
+        | - kepala_bps -> kepala
+        | - ketua_tim  -> ketua
+        |--------------------------------------------------------------------------
+        */
+        $role = match ($user->role) {
+            'admin' => 'admin',
+            'kepala', 'kepala_bps' => 'kepala',
+            'ketua', 'ketua_tim' => 'ketua',
+            'anggota' => 'anggota',
+            default => null,
+        };
+
+        /*
+        |--------------------------------------------------------------------------
+        | Invalid Role Guard
+        |--------------------------------------------------------------------------
+        | Kalau role tidak dikenali, user langsung dilogout.
+        |--------------------------------------------------------------------------
+        */
+        if (!$role) {
+            Auth::guard('web')->logout();
+
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('login')
+                ->with('error', 'Akun kamu belum memiliki role yang valid. Hubungi Admin.');
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Force Password Change
+        |--------------------------------------------------------------------------
+        | User dengan password sementara/default hasil create/reset Admin wajib
+        | mengganti password sebelum masuk dashboard.
+        |--------------------------------------------------------------------------
+        */
+        if ((int) $user->is_default_password === 1) {
+            /*
+            | Hapus intended URL lama agar tidak ada redirect ke dashboard
+            | sebelum user mengganti password.
+            */
+            $request->session()->forget('url.intended');
+
+            return redirect()
+                ->route('password.force-change')
+                ->with('error', 'Kamu menggunakan password sementara. Silakan ganti password terlebih dahulu.');
+        }
 
         /*
         |--------------------------------------------------------------------------
         | Role-based Redirect
         |--------------------------------------------------------------------------
-        | Role final sistem:
-        | - admin   -> /admin
-        | - kepala  -> /kepala
-        | - ketua   -> /ketua
-        | - anggota -> /anggota
-        |
-        | Catatan:
-        | kepala_bps dan ketua_tim disupport sementara sebagai fallback
-        | jika masih ada data lama di database.
+        | Semua role diarahkan ke dashboard masing-masing.
+        |--------------------------------------------------------------------------
         */
-        return match ($user->role) {
-            'admin' => redirect()->route('admin.dashboard'),
-
-            'kepala',
-            'kepala_bps' => redirect()->route('kepala.dashboard'),
-
-            'ketua',
-            'ketua_tim' => redirect()->route('ketua.dashboard'),
-
-            'anggota' => redirect()->route('anggota.dashboard'),
-
-            default => redirect('/'),
-        };
+        return redirect()->route($this->dashboardRouteForRole($role));
     }
 
     /**
@@ -70,6 +148,22 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        return redirect()
+            ->route('login')
+            ->with('success', 'Kamu berhasil logout.');
+    }
+
+    /**
+     * Get dashboard route by normalized role.
+     */
+    private function dashboardRouteForRole(string $role): string
+    {
+        return match ($role) {
+            'admin' => 'admin.dashboard',
+            'kepala' => 'kepala.dashboard',
+            'ketua' => 'ketua.dashboard',
+            'anggota' => 'anggota.dashboard',
+            default => 'login',
+        };
     }
 }

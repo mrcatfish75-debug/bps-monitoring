@@ -18,8 +18,6 @@ class User extends Authenticatable
     |--------------------------------------------------------------------------
     | Role Constants
     |--------------------------------------------------------------------------
-    | Pakai constant supaya role tidak typo di controller/model lain.
-    |--------------------------------------------------------------------------
     */
     public const ROLE_ADMIN = 'admin';
     public const ROLE_KEPALA = 'kepala';
@@ -30,11 +28,8 @@ class User extends Authenticatable
     |--------------------------------------------------------------------------
     | Mass Assignable Attributes
     |--------------------------------------------------------------------------
-    | IMPORTANT:
-    | - plain_password sengaja DIHAPUS dari fillable.
-    | - Jangan simpan password plaintext di database.
-    | - Password tetap boleh diisi lewat "password", dan akan otomatis di-hash
-    |   karena casts() memakai 'password' => 'hashed'.
+    | plain_password sengaja tidak dimasukkan.
+    | Jangan simpan password plaintext di database.
     |--------------------------------------------------------------------------
     */
     protected $fillable = [
@@ -45,13 +40,14 @@ class User extends Authenticatable
         'role',
         'team_id',
         'is_default_password',
+        'password_changed_at',
+        'password_reset_at',
+        'password_reset_by',
     ];
 
     /*
     |--------------------------------------------------------------------------
     | Hidden Attributes
-    |--------------------------------------------------------------------------
-    | Semua field sensitif wajib disembunyikan dari array/json response.
     |--------------------------------------------------------------------------
     */
     protected $hidden = [
@@ -64,8 +60,6 @@ class User extends Authenticatable
     |--------------------------------------------------------------------------
     | Attribute Casts
     |--------------------------------------------------------------------------
-    | password => hashed membuat password otomatis di-hash saat disimpan.
-    |--------------------------------------------------------------------------
     */
     protected function casts(): array
     {
@@ -74,6 +68,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_default_password' => 'boolean',
             'team_id' => 'integer',
+            'password_changed_at' => 'datetime',
+            'password_reset_at' => 'datetime',
         ];
     }
 
@@ -96,6 +92,11 @@ class User extends Authenticatable
     public function notifications()
     {
         return $this->hasMany(Notification::class);
+    }
+
+    public function passwordResetBy()
+    {
+        return $this->belongsTo(User::class, 'password_reset_by');
     }
 
     /*
@@ -130,6 +131,11 @@ class User extends Authenticatable
             self::ROLE_ANGGOTA,
             self::ROLE_KETUA,
         ], true);
+    }
+
+    public function mustChangePassword(): bool
+    {
+        return (bool) $this->is_default_password;
     }
 
     /*

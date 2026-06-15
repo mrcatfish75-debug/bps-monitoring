@@ -782,6 +782,6 @@ Kepala dan Admin melakukan monitoring
 
 ## Lisensi
 
-Project ini dibuat untuk kebutuhan internal pengembangan sistem monitoring kinerja BPS Kota Palangka Raya.
+Project ini dibuat untuk kebutuhan internal pengembangan Sistem monitoring kinerja BPS Kota Palangka Raya.
 
 Sesuaikan bagian lisensi ini dengan kebijakan repository atau instansi masing-masing.

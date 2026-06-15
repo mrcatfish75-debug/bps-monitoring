@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Team;
 use App\Models\User;
+use App\Models\Project;
+use App\Models\RkKetua;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TeamController extends Controller
 {
@@ -168,37 +171,46 @@ class TeamController extends Controller
         return view('admin.team.edit', compact('team', 'users'));
     }
 
+    
+
     public function update(Request $request, Team $team)
-    {
-        $leaderId = $request->leader_id ?? $request->ketua_id;
+{
+    $leaderId = $request->leader_id ?? $request->ketua_id;
 
-        if (!$leaderId) {
-            return back()
-                ->withInput()
-                ->with('error', 'Ketua tim wajib dipilih.');
-        }
+    if (!$leaderId) {
+        return back()
+            ->withInput()
+            ->with('error', 'Ketua tim wajib dipilih.');
+    }
 
-        $request->merge([
-            'leader_id' => $leaderId,
-        ]);
+    $request->merge([
+        'leader_id' => $leaderId,
+    ]);
 
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'leader_id' => 'required|exists:users,id',
-        ]);
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'leader_id' => 'required|exists:users,id',
+    ]);
 
-        $ketua = User::findOrFail($request->leader_id);
+    $ketua = User::findOrFail($request->leader_id);
 
-        if ($ketua->role !== 'ketua') {
-            return back()
-                ->withInput()
-                ->with('error', 'Ketua tim harus user dengan role ketua.');
-        }
+    if ($ketua->role !== 'ketua') {
+        return back()
+            ->withInput()
+            ->with('error', 'Ketua tim harus user dengan role ketua.');
+    }
+
+    $oldLeaderId = (int) $team->leader_id;
+    $newLeaderId = (int) $ketua->id;
+    $leaderChanged = $oldLeaderId !== $newLeaderId;
+
+    DB::transaction(function () use ($team, $request, $ketua, $newLeaderId) {
 
         /*
         |--------------------------------------------------------------------------
-        | Kalau ketua lama memakai team_id team ini, kosongkan dulu.
-        | Ini hanya untuk ketua, bukan anggota.
+        | Kosongkan team_id ketua lama
+        |--------------------------------------------------------------------------
+        | users.team_id hanya penanda ketua berada pada tim ini.
         |--------------------------------------------------------------------------
         */
         User::where('team_id', $team->id)
@@ -207,19 +219,68 @@ class TeamController extends Controller
                 'team_id' => null,
             ]);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Update Team
+        |--------------------------------------------------------------------------
+        */
         $team->update([
             'name' => $request->name,
-            'leader_id' => $ketua->id,
+            'leader_id' => $newLeaderId,
         ]);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Set ketua baru ke team ini
+        |--------------------------------------------------------------------------
+        */
         $ketua->update([
             'team_id' => $team->id,
         ]);
 
-        return redirect()
-            ->route('admin.team.index')
-            ->with('success', 'Tim berhasil diupdate.');
-    }
+        /*
+        |--------------------------------------------------------------------------
+        | Sinkronisasi data turunan
+        |--------------------------------------------------------------------------
+        | WAJIB selalu dijalankan setiap Team disimpan.
+        |
+        | Alasannya:
+        | - Bisa saja Team sudah berubah lebih dulu.
+        | - Tetapi Project/RK Ketua lama belum ikut tersinkron.
+        | - Kalau hanya dijalankan saat leaderChanged = true, data lama yang
+        |   sudah telanjur tidak sinkron tidak akan pernah diperbaiki.
+        |--------------------------------------------------------------------------
+        */
+
+        RkKetua::where('team_id', $team->id)
+            ->update([
+                'user_id' => $newLeaderId,
+            ]);
+
+        $projects = Project::where('team_id', $team->id)->get();
+
+        foreach ($projects as $project) {
+            $project->update([
+                'leader_id' => $newLeaderId,
+            ]);
+
+            /*
+            |--------------------------------------------------------------------------
+            | Ketua project tidak boleh menjadi anggota project sendiri.
+            |--------------------------------------------------------------------------
+            */
+            $project->members()->detach($newLeaderId);
+        }
+    });
+
+    $message = $leaderChanged
+        ? 'Tim berhasil diupdate. RK Ketua dan leader Project juga sudah disinkronkan ke ketua baru.'
+        : 'Tim berhasil diupdate. Data RK Ketua dan Project juga sudah dicek ulang agar tetap sinkron.';
+
+    return redirect()
+        ->route('admin.team.index')
+        ->with('success', $message);
+}
 
     public function destroy(Team $team)
     {

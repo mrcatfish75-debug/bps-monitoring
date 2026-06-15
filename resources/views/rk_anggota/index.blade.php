@@ -8,6 +8,7 @@
         'admin' => '/admin/rk-anggota',
         'anggota' => '/anggota/rk-anggota',
         'ketua' => '/ketua/rk-anggota',
+        'kepala' => '/kepala/rk-anggota',
         default => '/rk-anggota',
     };
 
@@ -15,89 +16,72 @@
         'admin' => '/admin/project',
         'ketua' => '/ketua/project',
         'anggota' => '/anggota/project',
+        'kepala' => '/kepala/project',
         default => '/project',
     };
 
-    /*
-    |--------------------------------------------------------------------------
-    | Mode Context
-    |--------------------------------------------------------------------------
-    | /ketua/rk-anggota
-    |   = mode ketua untuk review RK anggota dari project yang dia pimpin.
-    |
-    | /ketua/rk-anggota?mode=mine
-    |   = mode pekerjaan saya, hanya RK milik ketua sendiri.
-    */
-
     $isMineMode = $role === 'ketua' && request('mode') === 'mine';
-
-    /*
-    |--------------------------------------------------------------------------
-    | Personal Mode
-    |--------------------------------------------------------------------------
-    | Anggota dan ketua mode mine adalah konteks pekerjaan pribadi.
-    */
 
     $isPersonalMode = $role === 'anggota' || $isMineMode;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Manage Permission
-    |--------------------------------------------------------------------------
-    | Admin:
-    | - bisa mengelola semua RK Anggota.
-    |
-    | Anggota:
-    | - bisa mengelola RK miliknya sendiri.
-    |
-    | Ketua mode mine:
-    | - bisa mengelola RK miliknya sendiri.
-    |
-    | Ketua mode normal:
-    | - hanya review/approve/reject RK anggota project yang dia pimpin.
-    */
+    $isKepala = $role === 'kepala';
 
-    $canManageRkAnggota = $role === 'admin' || $isPersonalMode;
+    $canManageRkAnggota = !$isKepala && ($role === 'admin' || $isPersonalMode);
 
-    $resetUrl = $isMineMode
-        ? url()->current() . '?mode=mine'
-        : url()->current();
+   $resetUrl = $isMineMode
+    ? url()->current() . '?mode=mine'
+    : url()->current();
+
+$rkTemplateOptions = ($rkTemplates ?? collect())
+    ->map(function ($template) {
+        return [
+            'description' => $template->description ?? '',
+            'category' => $template->category ?? null,
+            'category_label' => $template->category_label ?? ($template->category ?? 'RK Anggota'),
+        ];
+    })
+    ->filter(fn ($template) => trim((string) $template['description']) !== '')
+    ->values();
 @endphp
 
 <div class="bg-white p-6 rounded-xl shadow">
 
     <!-- ================= HEADER ================= -->
     <div class="flex justify-between items-center mb-4">
-    <div>
-        <h2 class="text-xl font-bold">
-            {{ $isPersonalMode ? 'RK Pribadi Saya' : 'Rencana Kinerja - Anggota' }}
-        </h2>
+        <div>
+            <h2 class="text-xl font-bold">
+                {{ $isPersonalMode ? 'RK Pribadi Saya' : 'Rencana Kinerja - Anggota' }}
+            </h2>
 
-        @if($isPersonalMode)
-            <p class="text-sm text-gray-500 mt-1">
-                Menampilkan RK Anggota milikmu sendiri sebagai pelaksana project.
-            </p>
-        @elseif($role === 'ketua')
-            <p class="text-sm text-gray-500 mt-1">
-                Menampilkan RK Anggota dari project yang kamu pimpin.
-            </p>
-        @endif
+            @if($isPersonalMode)
+                <p class="text-sm text-gray-500 mt-1">
+                    Menampilkan RK Anggota milikmu sendiri sebagai pelaksana project.
+                </p>
+            @elseif($role === 'ketua')
+                <p class="text-sm text-gray-500 mt-1">
+                    Menampilkan RK Anggota dari project yang kamu pimpin.
+                </p>
+            @elseif($role === 'kepala')
+                <p class="text-sm text-gray-500 mt-1">
+                    Mode monitoring. Menampilkan seluruh RK Anggota lintas project, tim, dan IKU tanpa aksi tambah, edit, hapus, submit, approve, atau reject.
+                </p>
+            @endif
+        </div>
+
+        <div class="flex gap-2">
+            <a href="{{ $resetUrl }}" class="px-4 py-2 bg-gray-200 rounded">
+                Refresh
+            </a>
+
+            @if($canManageRkAnggota && (!$isPersonalMode || $projects->count() > 0))
+                <button type="button"
+                    onclick="openCreateModal()"
+                    class="bg-green-600 text-white px-4 py-2 rounded">
+                    + Add RK
+                </button>
+            @endif
+        </div>
     </div>
-
-    <div class="flex gap-2">
-        <a href="{{ $resetUrl }}" class="px-4 py-2 bg-gray-200 rounded">
-            Refresh
-        </a>
-
-       @if($canManageRkAnggota && (!$isPersonalMode || $projects->count() > 0))
-            <button type="button"
-                onclick="openCreateModal()"
-                class="bg-green-600 text-white px-4 py-2 rounded">
-                + Add
-            </button>
-        @endif
-    </div>
-</div>
 
     <!-- ================= ALERT ================= -->
     @if(session('success'))
@@ -123,291 +107,287 @@
     @endif
 
     <!-- ================= FILTER ================= -->
-<form id="rkAnggotaFilterForm"
-    method="GET"
-    onsubmit="return false;"
-    class="grid grid-cols-1 md:grid-cols-{{ ($role === 'admin' || ($role === 'ketua' && !$isMineMode)) ? '4' : '3' }} gap-2 mb-4">
+    <form id="rkAnggotaFilterForm"
+        method="GET"
+        class="mb-4">
 
-    @if($isMineMode)
-        <input type="hidden" name="mode" value="mine">
-    @endif
+        @if($isMineMode)
+            <input type="hidden" name="mode" value="mine">
+        @endif
 
-    <!-- PROJECT -->
-    <select name="project_id"
-        id="projectFilter"
-        class="rk-filter border px-3 py-2 rounded">
-        <option value="">Semua Project</option>
+        <div class="flex flex-col gap-2 xl:flex-row xl:items-center">
 
-        @foreach($projects as $p)
-            <option value="{{ $p->id }}"
-                {{ request('project_id') == $p->id ? 'selected' : '' }}>
-                {{ $p->name }}
-            </option>
-        @endforeach
-    </select>
+            <!-- FILTER INPUTS -->
+            <div class="grid flex-1 grid-cols-1 gap-2 md:grid-cols-{{ (in_array($role, ['admin', 'kepala'], true) || ($role === 'ketua' && !$isMineMode)) ? '3' : '2' }}">
 
-    <!-- USER -->
-    @if($role === 'admin' || ($role === 'ketua' && !$isMineMode))
-        <select name="user_id"
-            id="userFilter"
-            class="rk-filter border px-3 py-2 rounded">
-            <option value="">Semua Anggota</option>
+                <!-- PROJECT -->
+                <select name="project_id"
+                    id="projectFilter"
+                    class="rk-filter w-full border px-3 py-2 rounded">
+                    <option value="">Semua Project</option>
 
-            @foreach($users as $u)
-                <option value="{{ $u->id }}"
-                    {{ request('user_id') == $u->id ? 'selected' : '' }}>
-                    {{ $u->name }}
-                </option>
-            @endforeach
-        </select>
-    @endif
+                    @foreach($projects as $p)
+                        <option value="{{ $p->id }}"
+                            {{ request('project_id') == $p->id ? 'selected' : '' }}>
+                            {{ $p->name }}
+                        </option>
+                    @endforeach
+                </select>
 
-    <!-- SEARCH -->
-    <input type="text"
-        id="rkSearchInput"
-        name="search"
-        value="{{ request('search') }}"
-        placeholder="Cari project, anggota, atau rencana kinerja..."
-        autocomplete="off"
-        class="border px-3 py-2 rounded">
+                <!-- USER -->
+                @if(in_array($role, ['admin', 'kepala'], true) || ($role === 'ketua' && !$isMineMode))
+                    <select name="user_id"
+                        id="userFilter"
+                        class="rk-filter w-full border px-3 py-2 rounded">
+                        <option value="">Semua Anggota</option>
 
-    <!-- RESET -->
-    <a href="{{ $resetUrl }}"
-        class="bg-gray-200 text-gray-700 text-center px-4 py-2 rounded hover:bg-gray-300">
-        Reset
-    </a>
-
-</form>
-
-<div id="rkSearchInfo"
-    class="hidden mb-4 p-3 rounded bg-blue-50 text-blue-700 text-sm">
-</div>
-
-   <!-- ================= TABLE ================= -->
-<div id="rkTableWrapper" class="transition-opacity duration-150">
-<table class="w-full text-sm">
-
-    <thead class="bg-gray-50 border-b">
-        <tr>
-            <th class="text-left p-2">Project</th>
-            <th class="text-left p-2">Tim</th>
-
-            @if(!$isPersonalMode)
-                <th class="text-left p-2">Anggota</th>
-            @endif
-
-            <th class="text-left p-2">Rencana Kinerja</th>
-            <th class="text-left p-2">Status</th>
-            <th class="text-left p-2">Progress</th>
-            <th class="text-left p-2">Aksi</th>
-        </tr>
-    </thead>
-
-    <tbody id="rkAnggotaTableBody">
-    @forelse($rkAnggotas as $rk)
-
-        @php
-            $statusClass = match($rk->status) {
-                'draft' => 'bg-gray-100 text-gray-700',
-                'submitted' => 'bg-blue-100 text-blue-700',
-                'approved' => 'bg-green-100 text-green-700',
-                'rejected' => 'bg-red-100 text-red-700',
-                default => 'bg-gray-100 text-gray-700',
-            };
-
-            $statusLabel = match($rk->status) {
-                'draft' => 'Draft',
-                'submitted' => 'Submitted',
-                'approved' => 'Approved',
-                'rejected' => 'Rejected',
-                default => ucfirst($rk->status),
-            };
-
-            $isOwner = (int) $rk->user_id === (int) auth()->id();
-            $isProjectLeader = optional($rk->project)->leader_id === auth()->id();
-
-            $canEditDelete = $rk->isEditable()
-                && (
-                    $role === 'admin'
-                    || ($canManageRkAnggota && $isOwner)
-                );
-
-            $canSubmit = $rk->canSubmit()
-                && $rk->dailyTasks->count() > 0
-                && (
-                    $role === 'admin'
-                    || $isOwner
-                );
-
-            $canReview = $rk->canBeReviewed()
-                && !$isOwner
-                && (
-                    $role === 'admin'
-                    || ($role === 'ketua' && !$isMineMode && $isProjectLeader)
-                );
-
-            $submitAction = match($role) {
-                'admin' => route('admin.rk-anggota.submit', $rk->id),
-                'ketua' => route('ketua.rk-anggota.submit', $rk->id),
-                default => route('anggota.rk-anggota.submit', $rk->id),
-            };
-
-            $approveAction = $role === 'admin'
-                ? route('admin.rk-anggota.approve', $rk->id)
-                : route('ketua.rk-anggota.approve', $rk->id);
-
-            $rejectAction = $role === 'admin'
-                ? route('admin.rk-anggota.reject', $rk->id)
-                : route('ketua.rk-anggota.reject', $rk->id);
-        @endphp
-
-        <tr class="border-b hover:bg-gray-50">
-
-            <td class="p-2">{{ $rk->project->name ?? '-' }}</td>
-
-            <td class="p-2">{{ $rk->project->team->name ?? '-' }}</td>
-
-            @if(!$isPersonalMode)
-                <td class="p-2">{{ $rk->user->name ?? '-' }}</td>
-            @endif
-
-            <td class="p-2">
-                {{ $rk->description }}
-
-                @if($rk->status === 'rejected' && $rk->rejection_note)
-                    <div class="mt-1 text-xs text-red-600">
-                        <b>Catatan:</b> {{ $rk->rejection_note }}
-                    </div>
-                @endif
-            </td>
-
-            <!-- STATUS -->
-            <td class="p-2">
-                <span class="px-2 py-1 rounded text-xs font-semibold {{ $statusClass }}">
-                    {{ $statusLabel }}
-                </span>
-
-                @if($rk->submitted_at)
-                    <div class="text-xs text-gray-500 mt-1">
-                        Submit: {{ $rk->submitted_at->format('d M Y H:i') }}
-                    </div>
+                        @foreach($users as $u)
+                            <option value="{{ $u->id }}"
+                                {{ request('user_id') == $u->id ? 'selected' : '' }}>
+                                {{ $u->name }}
+                            </option>
+                        @endforeach
+                    </select>
                 @endif
 
-                @if($rk->approved_at)
-                    <div class="text-xs text-gray-500 mt-1">
-                        Approved: {{ $rk->approved_at->format('d M Y H:i') }}
-                    </div>
-                @endif
-            </td>
+                <!-- SEARCH -->
+                <input type="text"
+                    id="rkSearchInput"
+                    name="search"
+                    value="{{ request('search') }}"
+                    placeholder="Cari project, anggota, atau rencana kinerja..."
+                    autocomplete="off"
+                    class="w-full border px-3 py-2 rounded">
+            </div>
 
-            <!-- PROGRESS -->
-            <td class="p-2">
-                <div class="w-full bg-gray-200 h-2 rounded">
-                    <div class="bg-green-500 h-2 rounded"
-                        style="width: {{ $rk->progress }}%">
-                    </div>
-                </div>
-                <small>{{ $rk->progress }}%</small>
-            </td>
+            <!-- ACTION BUTTONS -->
+            <div class="flex shrink-0 gap-2">
+                <button type="submit"
+                    class="whitespace-nowrap bg-gray-800 text-white px-5 py-2 rounded hover:bg-gray-700">
+                    Filter
+                </button>
+            </div>
 
-            <!-- AKSI -->
-            <td class="p-2">
-                <div class="flex flex-wrap gap-2">
+        </div>
+    </form>
 
-                    <!-- VIEW -->
-                    <button type="button"
-                        onclick="openViewModal({{ $rk->id }})"
-                        class="text-blue-500">
-                        View
-                    </button>
+    <div id="rkSearchInfo"
+        class="hidden mb-4 p-3 rounded bg-blue-50 text-blue-700 text-sm">
+    </div>
 
-                    <!-- EDIT -->
-                    @if($canEditDelete)
-                        <button type="button"
-                            onclick="openEditModal({{ $rk->id }})"
-                            class="text-yellow-500">
-                            Edit
-                        </button>
+    <!-- ================= TABLE ================= -->
+    <div id="rkTableWrapper" class="transition-opacity duration-150">
+        <table class="w-full text-sm">
+
+            <thead class="bg-gray-50 border-b">
+                <tr>
+                    <th class="text-left p-2">Project</th>
+                    <th class="text-left p-2">Tim</th>
+
+                    @if(!$isPersonalMode)
+                        <th class="text-left p-2">Anggota</th>
                     @endif
 
-                    <!-- DELETE -->
-                    @if($canEditDelete)
-                        <form method="POST"
-                            action="{{ url($basePath . '/' . $rk->id) }}"
-                            class="inline"
-                            onsubmit="return confirm('Yakin ingin menghapus RK Anggota ini?')">
-                            @csrf
-                            @method('DELETE')
+                    <th class="text-left p-2">Rencana Kinerja</th>
+                    <th class="text-left p-2">IKI</th>
+                    <th class="text-left p-2">Status IKI</th>
+                    <th class="text-left p-2">Progress</th>
+                    <th class="text-left p-2">Aksi</th>
+                </tr>
+            </thead>
 
-                            <button class="text-red-500">
-                                Delete
-                            </button>
-                        </form>
+            <tbody id="rkAnggotaTableBody">
+            @forelse($rkAnggotas as $rk)
+
+                @php
+    $ikiCount = $rk->ikis->count();
+    $approvedIkiCount = $rk->ikis->where('status', 'approved')->count();
+    $submittedIkiCount = $rk->ikis->where('status', 'submitted')->count();
+    $rejectedIkiCount = $rk->ikis->where('status', 'rejected')->count();
+    $draftIkiCount = $rk->ikis->where('status', 'draft')->count();
+
+    if ($ikiCount === 0) {
+        $statusClass = 'bg-gray-100 text-gray-700';
+        $statusLabel = 'Belum Ada IKI';
+    } elseif ($approvedIkiCount === $ikiCount) {
+        $statusClass = 'bg-green-100 text-green-700';
+        $statusLabel = 'Semua IKI Approved';
+    } elseif ($submittedIkiCount > 0) {
+        $statusClass = 'bg-blue-100 text-blue-700';
+        $statusLabel = 'Ada IKI Submitted';
+    } elseif ($rejectedIkiCount > 0) {
+        $statusClass = 'bg-red-100 text-red-700';
+        $statusLabel = 'Ada IKI Rejected';
+    } else {
+        $statusClass = 'bg-gray-100 text-gray-700';
+        $statusLabel = 'Draft IKI';
+    }
+
+    $isOwner = (int) $rk->user_id === (int) auth()->id();
+
+    $hasLockedIki = $rk->ikis
+        ->whereIn('status', ['submitted', 'approved'])
+        ->isNotEmpty();
+
+    $canEditDelete = !$hasLockedIki
+        && (
+            $role === 'admin'
+            || ($canManageRkAnggota && $isOwner)
+        );
+
+    $ikiUrl = match($role) {
+        'admin' => '/admin/iki',
+        'ketua' => $isMineMode ? '/ketua/iki?mode=mine&rk_anggota_id=' . $rk->id : '/ketua/iki?rk_anggota_id=' . $rk->id,
+        'anggota' => '/anggota/iki?rk_anggota_id=' . $rk->id,
+        'kepala' => '/kepala/iki?rk_anggota_id=' . $rk->id,
+        default => '/iki?rk_anggota_id=' . $rk->id,
+    };
+
+    if ($role === 'admin') {
+        $ikiUrl = '/admin/iki?rk_anggota_id=' . $rk->id;
+    }
+@endphp
+
+                <tr class="border-b hover:bg-gray-50">
+
+                    <td class="p-2">{{ $rk->project->name ?? '-' }}</td>
+
+                    <td class="p-2">{{ $rk->project->team->name ?? '-' }}</td>
+
+                    @if(!$isPersonalMode)
+                        <td class="p-2">{{ $rk->user->name ?? '-' }}</td>
                     @endif
 
-                    <!-- SUBMIT -->
-                    @if($canSubmit)
-                        <form method="POST"
-                            action="{{ $submitAction }}"
-                            class="inline"
-                            onsubmit="return confirm('Submit RK Anggota ini untuk review ketua?')">
-                            @csrf
-                            @method('PATCH')
+                    <td class="p-2">
+                        {{ $rk->description }}
 
-                            <button class="text-purple-600 font-semibold">
-                                Submit
-                            </button>
-                        </form>
-                    @endif
+                        @if($rk->status === 'rejected' && $rk->rejection_note)
+                            <div class="mt-1 text-xs text-red-600">
+                                <b>Catatan:</b> {{ $rk->rejection_note }}
+                            </div>
+                        @endif
+                    </td>
 
-                    @if($rk->canSubmit() && $isOwner && $rk->dailyTasks->count() === 0)
-                        <span class="text-xs text-gray-400">
-                            Tambahkan Daily Task dulu
+                    <!-- IKI -->
+                    <td class="p-2">
+                        <div class="font-semibold text-gray-800">
+                            {{ $approvedIkiCount }}/{{ $ikiCount }} Approved
+                        </div>
+
+                        <div class="text-xs text-gray-400 mt-1">
+                            {{ $ikiCount }} IKI total
+                        </div>
+
+                        @if($submittedIkiCount > 0)
+                            <div class="text-xs text-blue-600 mt-1">
+                                {{ $submittedIkiCount }} menunggu review
+                            </div>
+                        @endif
+
+                        @if($rejectedIkiCount > 0)
+                            <div class="text-xs text-red-600 mt-1">
+                                {{ $rejectedIkiCount }} perlu revisi
+                            </div>
+                        @endif
+                    </td>
+
+                    <!-- STATUS IKI -->
+                    <td class="p-2">
+                        <span class="px-2 py-1 rounded text-xs font-semibold {{ $statusClass }}">
+                            {{ $statusLabel }}
                         </span>
-                    @endif
 
-                    <!-- APPROVE -->
-                    @if($canReview)
-                        <form method="POST"
-                            action="{{ $approveAction }}"
-                            class="inline"
-                            onsubmit="return confirm('Setujui RK Anggota ini?')">
-                            @csrf
-                            @method('PATCH')
+                        <div class="text-xs text-gray-500 mt-1">
+                            Approval dilakukan di IKI
+                        </div>
+                    </td>
 
-                            <button class="text-green-600 font-semibold">
-                                Approve
+                    <!-- PROGRESS -->
+                    <td class="p-2">
+                        <div class="w-full bg-gray-200 h-2 rounded">
+                            <div class="bg-green-500 h-2 rounded"
+                                style="width: {{ $rk->progress }}%">
+                            </div>
+                        </div>
+                        <small>{{ $rk->progress }}%</small>
+                    </td>
+
+                    <!-- AKSI -->
+                    <td class="p-2 relative">
+                        <div class="relative inline-block text-left">
+
+                            <button type="button"
+                                data-rk-action-button
+                                onclick="toggleRkActionMenu('rk-action-menu-{{ $rk->id }}', event)"
+                                class="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
+                                Aksi
+                                <span class="text-xs">▾</span>
                             </button>
-                        </form>
-                    @endif
 
-                    <!-- REJECT -->
-                    @if($canReview)
-                        <button type="button"
-                            onclick="openRejectModal({{ $rk->id }}, '{{ $rejectAction }}')"
-                            class="text-red-600 font-semibold">
-                            Reject
-                        </button>
-                    @endif
+                            <div id="rk-action-menu-{{ $rk->id }}"
+                                data-rk-action-menu
+                                class="hidden absolute right-0 top-full z-50 mt-2 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
 
-                </div>
-            </td>
+                                <!-- VIEW -->
+                                <button type="button"
+                                    onclick="closeAllRkActionMenus(); openViewModal({{ $rk->id }})"
+                                    class="block w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50">
+                                    View
+                                </button>
 
-        </tr>
-    @empty
-        <tr>
-            <td colspan="{{ $isPersonalMode ? 6 : 7 }}" class="text-center py-4">
-                Tidak ada data
-            </td>
-        </tr>
-    @endforelse
-    </tbody>
+                                <!-- EDIT -->
+                                @if($canEditDelete)
+                                    <button type="button"
+                                        onclick="closeAllRkActionMenus(); openEditModal({{ $rk->id }})"
+                                        class="block w-full px-4 py-2 text-left text-sm text-yellow-600 hover:bg-yellow-50">
+                                        Edit
+                                    </button>
+                                @endif
 
-</table>
-</div>
+                                <!-- DELETE -->
+                                @if($canEditDelete)
+                                    <form method="POST"
+                                        action="{{ url($basePath . '/' . $rk->id) }}"
+                                        onsubmit="return confirm('Yakin ingin menghapus RK Anggota ini?')">
+                                        @csrf
+                                        @method('DELETE')
 
-<div id="rkPagination" class="mt-4">
-    {{ $rkAnggotas->withQueryString()->links() }}
+                                        <button type="submit"
+                                            class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50">
+                                            Delete
+                                        </button>
+                                    </form>
+                                @endif
+
+                                <a href="{{ $ikiUrl }}"
+                                    class="block px-4 py-2 text-sm font-semibold text-purple-600 hover:bg-purple-50">
+                                    @if($canManageRkAnggota)
+                                        {{ $ikiCount > 0 ? 'Kelola IKI' : 'Buat IKI' }}
+                                    @else
+                                        Lihat IKI
+                                    @endif
+                                </a>
+                            </div>
+                        </div>
+                    </td>
+
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="{{ $isPersonalMode ? 7 : 8 }}" class="text-center py-4">
+                        Tidak ada data
+                    </td>
+                </tr>
+            @endforelse
+            </tbody>
+
+        </table>
+    </div>
+
+    <div id="rkPagination" class="mt-4">
+        {{ $rkAnggotas->withQueryString()->links() }}
+    </div>
+
 </div>
 
 <!-- ================= VIEW MODAL ================= -->
@@ -422,7 +402,7 @@
                     Detail RK Anggota
                 </h3>
                 <p class="text-sm text-gray-500 mt-1">
-                    Detail rencana kerja, status review, dan Daily Task pendukung.
+                    RK Anggota adalah wadah kerja. Progress dan approval dihitung dari IKI.
                 </p>
             </div>
 
@@ -549,30 +529,36 @@
             </div>
 
             <!-- DESKRIPSI -->
-            <div class="mb-5">
+            <div class="mb-5 relative">
                 <label class="block text-sm font-semibold text-gray-700 mb-1">
                     Rencana Kinerja
                 </label>
 
-                <textarea name="description"
+                <textarea id="create_description"
+                    name="description"
                     required
                     rows="5"
-                    placeholder="Tulis rencana kerja yang akan dikerjakan..."
+                    placeholder="Ketik rencana kerja atau pilih dari template..."
+                    autocomplete="off"
                     class="border w-full p-3 rounded-lg focus:ring focus:ring-green-100 focus:border-green-500"></textarea>
 
+                <div id="createTemplateDropdown"
+                    class="hidden mt-2 max-h-48 overflow-y-auto rounded-xl border bg-white shadow-lg">
+                </div>
+
                 <p class="text-xs text-gray-400 mt-1">
-                    Contoh: Menyusun bahan, mengolah data, melakukan validasi, atau menyiapkan output pekerjaan.
+                    Ketik manual atau klik kolom ini untuk memilih template RK Anggota.
                 </p>
             </div>
 
             <!-- INFO -->
             <div class="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-700">
                 @if($isMineMode || $role === 'anggota')
-                    Kamu bisa membuat lebih dari satu RK pribadi dalam project yang sama. Daily Task nantinya dibuat untuk menyelesaikan RK ini.
+                   Kamu bisa membuat lebih dari satu RK pribadi dalam project yang sama. Setelah RK dibuat, lanjutkan dengan membuat IKI. Daily Task nantinya dibuat di bawah IKI.
                 @elseif($role === 'admin')
                     Pastikan anggota yang dipilih memang termasuk dalam project tersebut.
                 @else
-                    RK Anggota akan masuk sebagai draft dan bisa disubmit setelah memiliki minimal satu Daily Task.
+                    RK Anggota akan menjadi wadah kerja. Approval dilakukan melalui IKI, bukan langsung dari RK Anggota.
                 @endif
             </div>
 
@@ -596,6 +582,75 @@
 </div>
 @endif
 
+<!-- ================= SUBMIT MODAL ================= -->
+@if($role === 'admin' || $isPersonalMode)
+<div id="modalSubmit"
+    class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+
+    <div class="bg-white rounded-2xl w-[560px] max-h-[90vh] overflow-y-auto shadow-xl">
+
+        <!-- HEADER -->
+        <div class="px-6 py-4 border-b flex justify-between items-start">
+            <div>
+                <h3 class="text-xl font-bold text-gray-900">
+                    Submit RK Anggota
+                </h3>
+
+                <p class="text-sm text-gray-500 mt-1">
+                    Kirim RK Anggota untuk direview Ketua. Sertakan link bukti final pekerjaan.
+                </p>
+            </div>
+
+            <button type="button"
+                onclick="closeModal('modalSubmit')"
+                class="text-gray-400 hover:text-red-500 text-2xl leading-none">
+                ×
+            </button>
+        </div>
+
+        <form method="POST" id="formSubmit" class="p-6">
+            @csrf
+            @method('PATCH')
+
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-gray-700 mb-1">
+                    Link Bukti Final
+                </label>
+
+                <input type="text"
+                    name="final_evidence"
+                    required
+                    maxlength="2000"
+                    placeholder="Contoh: link laporan, folder Drive, PDF, spreadsheet, dashboard, atau dokumen output"
+                    class="border w-full p-3 rounded-lg focus:ring focus:ring-purple-100 focus:border-purple-500">
+
+                <p class="text-xs text-gray-400 mt-1">
+                    Bukti ini menjadi dasar Ketua melakukan review approve/reject RK Anggota.
+                </p>
+            </div>
+
+            <div class="mb-5 p-4 rounded-xl bg-purple-50 border border-purple-100 text-sm text-purple-700">
+                Pastikan Daily Task sudah terisi dan bukti final dapat diakses oleh Ketua.
+            </div>
+
+            <div class="flex justify-end gap-2 pt-4 border-t">
+                <button type="button"
+                    onclick="closeModal('modalSubmit')"
+                    class="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-lg">
+                    Cancel
+                </button>
+
+                <button type="submit"
+                    class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg shadow">
+                    Submit
+                </button>
+            </div>
+        </form>
+
+    </div>
+</div>
+@endif
+
 
 <!-- ================= EDIT MODAL ================= -->
 @if($canManageRkAnggota)
@@ -611,7 +666,7 @@
                     Edit RK Anggota
                 </h3>
                 <p class="text-sm text-gray-500 mt-1">
-                    Perubahan hanya bisa dilakukan selama RK masih Draft atau Rejected.
+                    Perubahan hanya bisa dilakukan selama RK belum memiliki IKI yang Submitted atau Approved.
                 </p>
             </div>
 
@@ -686,7 +741,7 @@
             </div>
 
             <!-- DESKRIPSI -->
-            <div class="mb-5">
+            <div class="mb-5 relative">
                 <label class="block text-sm font-semibold text-gray-700 mb-1">
                     Rencana Kinerja
                 </label>
@@ -695,13 +750,22 @@
                     name="description"
                     required
                     rows="5"
-                    placeholder="Tulis rencana kerja yang akan dikerjakan..."
+                    placeholder="Ketik rencana kerja atau pilih dari template..."
+                    autocomplete="off"
                     class="border w-full p-3 rounded-lg focus:ring focus:ring-yellow-100 focus:border-yellow-500"></textarea>
+
+               <div id="editTemplateDropdown"
+                    class="hidden mt-2 max-h-48 overflow-y-auto rounded-xl border bg-white shadow-lg">
+                </div>
+
+                <p class="text-xs text-gray-400 mt-1">
+                    Ketik manual atau klik kolom ini untuk memilih template RK Anggota.
+                </p>
             </div>
 
             <!-- INFO -->
             <div class="mb-5 p-4 rounded-xl bg-yellow-50 border border-yellow-100 text-sm text-yellow-700">
-                RK Anggota yang sudah Submitted atau Approved tidak bisa diedit. Jika RK ditolak, kamu bisa memperbaiki lalu submit ulang.
+                RK Anggota tidak bisa diedit jika sudah memiliki IKI yang Submitted atau Approved.
             </div>
 
             <!-- ACTION -->
@@ -771,6 +835,56 @@
 const RK_ANGGOTA_BASE_PATH = @json($basePath);
 const PROJECT_BASE_PATH = @json($projectBasePath);
 const IS_ADMIN = @json($role === 'admin');
+const RK_TEMPLATE_OPTIONS = @json($rkTemplateOptions);
+
+/*
+|--------------------------------------------------------------------------
+| Row Action Dropdown
+|--------------------------------------------------------------------------
+| Menu aksi ringkas untuk kolom Aksi.
+|--------------------------------------------------------------------------
+*/
+
+function closeAllRkActionMenus() {
+    document.querySelectorAll('[data-rk-action-menu]').forEach(menu => {
+        menu.classList.add('hidden');
+    });
+}
+
+function toggleRkActionMenu(menuId, event = null) {
+    if (event) {
+        event.stopPropagation();
+    }
+
+    const targetMenu = document.getElementById(menuId);
+
+    if (!targetMenu) {
+        return;
+    }
+
+    const isCurrentlyHidden = targetMenu.classList.contains('hidden');
+
+    closeAllRkActionMenus();
+
+    if (isCurrentlyHidden) {
+        targetMenu.classList.remove('hidden');
+    }
+}
+
+document.addEventListener('click', function (event) {
+    const clickedButton = event.target.closest('[data-rk-action-button]');
+    const clickedMenu = event.target.closest('[data-rk-action-menu]');
+
+    if (!clickedButton && !clickedMenu) {
+        closeAllRkActionMenus();
+    }
+});
+
+document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') {
+        closeAllRkActionMenus();
+    }
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -804,6 +918,27 @@ function openRejectModal(id, actionUrl){
 
     form.action = actionUrl;
     modal.classList.remove('hidden');
+}
+
+function openSubmitModal(id, actionUrl){
+    const form = document.getElementById('formSubmit');
+    const modal = document.getElementById('modalSubmit');
+
+    if (!form || !modal) {
+        console.error('Submit modal/form tidak ditemukan.');
+        return;
+    }
+
+    form.action = actionUrl;
+    modal.classList.remove('hidden');
+
+    setTimeout(() => {
+        const input = modal.querySelector('input[name="final_evidence"]');
+
+        if (input) {
+            input.focus();
+        }
+    }, 50);
 }
 
 /*
@@ -896,8 +1031,8 @@ function openEditModal(id){
             editDescription.value = data.description ?? '';
 
             if (IS_ADMIN) {
-    loadProjectMembers(data.project_id, 'edit_user', data.user_id);
-}
+                loadProjectMembers(data.project_id, 'edit_user', data.user_id);
+            }
         })
         .catch(error => {
             console.error(error);
@@ -921,39 +1056,72 @@ function openViewModal(id){
             return res.json();
         })
         .then(data => {
-            let dailyTasksHtml = '';
+            const viewContent = document.getElementById('viewContent');
+            const modalView = document.getElementById('modalView');
 
-            if (data.daily_tasks && data.daily_tasks.length > 0) {
-                dailyTasksHtml = `
+            if (!viewContent || !modalView) {
+                return;
+            }
+
+            const ikis = data.ikis ?? [];
+
+            let ikisHtml = '';
+
+            if (ikis.length > 0) {
+                ikisHtml = `
                     <div class="mt-5">
-                        <h4 class="font-semibold mb-2">Daily Task / Bukti Proses</h4>
+                        <h4 class="font-semibold mb-2">Daftar IKI</h4>
 
                         <div class="border rounded-xl overflow-hidden">
-                            ${data.daily_tasks.map(task => {
-                                const evidenceHtml = task.evidence_url
-                                    ? `<a class="text-blue-600 underline" href="${task.evidence_url}" target="_blank">Buka Link</a>`
-                                    : '<span class="text-gray-400">-</span>';
+                            ${ikis.map(iki => {
+                                const statusClass = {
+                                    draft: 'bg-gray-100 text-gray-700',
+                                    submitted: 'bg-blue-100 text-blue-700',
+                                    approved: 'bg-green-100 text-green-700',
+                                    rejected: 'bg-red-100 text-red-700',
+                                }[iki.status] ?? 'bg-gray-100 text-gray-700';
+
+                                const evidenceHtml = iki.final_evidence
+                                    ? `<a class="text-blue-600 underline" href="${escapeHtml(iki.final_evidence)}" target="_blank" rel="noopener noreferrer">Buka Bukti</a>`
+                                    : '<span class="text-gray-400">Belum ada bukti final</span>';
+
+                                const rejectionHtml = iki.status === 'rejected' && iki.rejection_note
+                                    ? `<div class="mt-2 text-xs text-red-600"><b>Catatan:</b> ${escapeHtml(iki.rejection_note)}</div>`
+                                    : '';
 
                                 return `
                                     <div class="p-4 border-b last:border-b-0 bg-white">
-                                        <div class="flex justify-between gap-4 mb-2">
-                                            <div class="font-medium text-gray-800">
-                                                ${task.activity ?? '-'}
-                                            </div>
-                                            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded shrink-0">
-                                                ${task.date ?? '-'}
-                                            </span>
-                                        </div>
+                                        <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
+                                            <div>
+                                                <div class="font-semibold text-gray-900">
+                                                    ${escapeHtml(iki.description ?? '-')}
+                                                </div>
 
-                                        <div class="text-sm text-gray-600">
-                                            <b>Link Bukti:</b> ${evidenceHtml}
-                                        </div>
+                                                <div class="text-xs text-gray-500 mt-1">
+                                                    Target: ${escapeHtml(iki.target ?? '-')} ${escapeHtml(iki.unit ?? '')}
+                                                </div>
 
-                                        ${task.created_at ? `
-                                            <div class="text-xs text-gray-400 mt-2">
-                                                Dibuat: ${formatDate(task.created_at)}
+                                                <div class="text-xs text-gray-500 mt-1">
+                                                    Daily Task: ${iki.daily_task_count ?? 0}
+                                                </div>
+
+                                                ${rejectionHtml}
                                             </div>
-                                        ` : ''}
+
+                                            <div class="text-right shrink-0">
+                                                <span class="px-2 py-1 rounded text-xs font-semibold ${statusClass}">
+                                                    ${escapeHtml(iki.status_label ?? iki.status ?? '-')}
+                                                </span>
+
+                                                <div class="text-xs text-gray-500 mt-2">
+                                                    Progress: ${iki.progress ?? 0}%
+                                                </div>
+
+                                                <div class="text-xs mt-2">
+                                                    ${evidenceHtml}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 `;
                             }).join('')}
@@ -961,36 +1129,11 @@ function openViewModal(id){
                     </div>
                 `;
             } else {
-                dailyTasksHtml = `
+                ikisHtml = `
                     <div class="mt-5 p-4 bg-yellow-50 text-yellow-700 rounded-xl border border-yellow-100">
-                        Belum ada Daily Task untuk RK Anggota ini.
+                        Belum ada IKI untuk RK Anggota ini. Buat IKI terlebih dahulu agar progress dapat dihitung.
                     </div>
                 `;
-            }
-
-            let rejectionHtml = '';
-
-            if (data.status === 'rejected' && data.rejection_note) {
-                rejectionHtml = `
-                    <div class="p-3 rounded-xl bg-red-50 text-red-700 border border-red-100">
-                        <b>Catatan Penolakan:</b> ${data.rejection_note}
-                    </div>
-                `;
-            }
-
-            let approverHtml = '';
-
-            if (data.approver) {
-                approverHtml = `
-                    <p><b>Approved By:</b> ${data.approver.name}</p>
-                `;
-            }
-
-            const viewContent = document.getElementById('viewContent');
-            const modalView = document.getElementById('modalView');
-
-            if (!viewContent || !modalView) {
-                return;
             }
 
             viewContent.innerHTML = `
@@ -999,28 +1142,28 @@ function openViewModal(id){
                     <div class="p-4 rounded-xl bg-gray-50 border">
                         <div class="text-xs text-gray-500 mb-1">IKU</div>
                         <div class="font-semibold">
-                            ${data.project?.rk_ketua?.iku?.name ?? '-'}
+                            ${escapeHtml(data.project?.rk_ketua?.iku?.name ?? '-')}
                         </div>
                     </div>
 
                     <div class="p-4 rounded-xl bg-gray-50 border">
                         <div class="text-xs text-gray-500 mb-1">Project</div>
                         <div class="font-semibold">
-                            ${data.project?.name ?? '-'}
+                            ${escapeHtml(data.project?.name ?? '-')}
                         </div>
                     </div>
 
                     <div class="p-4 rounded-xl bg-gray-50 border">
                         <div class="text-xs text-gray-500 mb-1">Tim</div>
                         <div class="font-semibold">
-                            ${data.project?.team?.name ?? '-'}
+                            ${escapeHtml(data.project?.team?.name ?? '-')}
                         </div>
                     </div>
 
                     <div class="p-4 rounded-xl bg-gray-50 border">
                         <div class="text-xs text-gray-500 mb-1">Anggota</div>
                         <div class="font-semibold">
-                            ${data.user?.name ?? '-'}
+                            ${escapeHtml(data.user?.name ?? '-')}
                         </div>
                     </div>
 
@@ -1029,29 +1172,43 @@ function openViewModal(id){
                 <div class="mt-4 p-4 rounded-xl border">
                     <div class="text-xs text-gray-500 mb-1">Rencana Kinerja</div>
                     <div class="font-medium text-gray-800">
-                        ${data.description ?? '-'}
+                        ${escapeHtml(data.description ?? '-')}
                     </div>
                 </div>
 
-                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="p-4 rounded-xl border">
-                        <p><b>Status:</b> ${data.status ?? '-'}</p>
-                        ${data.submitted_at ? `<p><b>Submitted At:</b> ${formatDate(data.submitted_at)}</p>` : ''}
-                        ${data.approved_at ? `<p><b>Approved At:</b> ${formatDate(data.approved_at)}</p>` : ''}
-                        ${approverHtml}
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="p-4 rounded-xl border bg-purple-50 border-purple-100">
+                        <div class="text-xs text-purple-600 font-semibold mb-1">Total IKI</div>
+                        <div class="text-2xl font-bold text-purple-700">
+                            ${data.iki_count ?? 0}
+                        </div>
                     </div>
 
-                    <div class="p-4 rounded-xl border">
-                        <p><b>Total Daily Task:</b> ${data.daily_tasks ? data.daily_tasks.length : 0}</p>
-                        <p><b>Progress:</b> ${data.progress ?? 0}%</p>
+                    <div class="p-4 rounded-xl border bg-green-50 border-green-100">
+                        <div class="text-xs text-green-600 font-semibold mb-1">IKI Approved</div>
+                        <div class="text-2xl font-bold text-green-700">
+                            ${data.approved_iki_count ?? 0}
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl border bg-blue-50 border-blue-100">
+                        <div class="text-xs text-blue-600 font-semibold mb-1">Progress RK</div>
+                        <div class="text-2xl font-bold text-blue-700">
+                            ${data.progress ?? 0}%
+                        </div>
                     </div>
                 </div>
 
-                <div class="mt-4">
-                    ${rejectionHtml}
+                <div class="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-700">
+                   Approval dilakukan pada level IKI. RK Anggota hanya menjadi wadah rencana kerja.
+                   Progress dan Daily Task dihitung dari IKI di bawah RK ini.
+
+                    <div class="mt-2 font-semibold">
+                        Total Daily Task: ${data.daily_task_count ?? 0}
+                    </div>
                 </div>
 
-                ${dailyTasksHtml}
+                ${ikisHtml}
             `;
 
             modalView.classList.remove('hidden');
@@ -1061,6 +1218,7 @@ function openViewModal(id){
             alert('Gagal mengambil detail RK Anggota.');
         });
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -1299,20 +1457,208 @@ document.addEventListener('DOMContentLoaded', function(){
 
     const createProject = document.getElementById('create_project');
 
-   if (createProject && IS_ADMIN) {
-    createProject.addEventListener('change', function(){
-        loadProjectMembers(this.value, 'create_user');
-    });
-}
+    if (createProject && IS_ADMIN) {
+        createProject.addEventListener('change', function(){
+            loadProjectMembers(this.value, 'create_user');
+        });
+    }
 
     const editProject = document.getElementById('edit_project');
 
-   if (editProject && IS_ADMIN) {
-    editProject.addEventListener('change', function(){
-        loadProjectMembers(this.value, 'edit_user');
+    if (editProject && IS_ADMIN) {
+        editProject.addEventListener('change', function(){
+            loadProjectMembers(this.value, 'edit_user');
+        });
+    }
+
+});
+
+/*
+|--------------------------------------------------------------------------
+| RK Template Picker - One Field Autocomplete
+|--------------------------------------------------------------------------
+*/
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function escapeAttribute(value) {
+    return escapeHtml(value).replaceAll('\n', '&#10;');
+}
+
+function splitNumberedTemplateDescription(description) {
+    const text = String(description ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!text) {
+        return [];
+    }
+
+    const matches = [...text.matchAll(/(?:^|\s)(\d+)\.\s*(.*?)(?=\s+\d+\.\s*|$)/g)];
+
+    if (matches.length === 0) {
+        return [text];
+    }
+
+    return matches
+        .map(match => String(match[2] ?? '').trim())
+        .filter(Boolean);
+}
+
+function getNormalizedRkTemplateOptions() {
+    const normalized = [];
+
+    RK_TEMPLATE_OPTIONS.forEach(item => {
+        const descriptions = splitNumberedTemplateDescription(item.description);
+
+        descriptions.forEach(description => {
+            normalized.push({
+                description: description,
+                category: item.category ?? null,
+                category_label: item.category_label ?? item.category ?? 'RK Anggota',
+            });
+        });
+    });
+
+    const unique = [];
+    const seen = new Set();
+
+    normalized.forEach(item => {
+        const key = item.description.toLowerCase().trim();
+
+        if (!key || seen.has(key)) {
+            return;
+        }
+
+        seen.add(key);
+        unique.push(item);
+    });
+
+    return unique;
+}
+
+function setupRkTemplateTextarea(textareaId, dropdownId) {
+    const textarea = document.getElementById(textareaId);
+    const dropdown = document.getElementById(dropdownId);
+
+    if (!textarea || !dropdown) {
+        return;
+    }
+
+    const templateOptions = getNormalizedRkTemplateOptions();
+
+    function normalizeText(value) {
+        return String(value ?? '').toLowerCase();
+    }
+
+    function hideDropdown() {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+    }
+
+    function showDropdown() {
+        dropdown.classList.remove('hidden');
+    }
+
+    function renderTemplates(keyword = '') {
+        const search = normalizeText(keyword).trim();
+
+        let templates = templateOptions.filter(item => {
+            const description = normalizeText(item.description);
+            const category = normalizeText(item.category_label ?? item.category);
+
+            if (!search) {
+                return true;
+            }
+
+            return description.includes(search) || category.includes(search);
+        });
+
+        templates = templates.slice(0, 50);
+
+        if (templates.length === 0) {
+            dropdown.innerHTML = `
+                <div class="p-3 text-sm text-gray-400">
+                    Template tidak ditemukan. Kamu tetap bisa mengetik manual.
+                </div>
+            `;
+            showDropdown();
+            return;
+        }
+
+        dropdown.innerHTML = templates.map(item => {
+            const categoryLabel = item.category_label ?? item.category ?? 'RK Anggota';
+
+            return `
+                <button type="button"
+                    class="rk-template-option block w-full border-b px-4 py-3 text-left text-sm last:border-b-0 hover:bg-green-50"
+                    data-description="${escapeAttribute(item.description)}">
+                    <div class="mb-1">
+                        <span class="rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
+                            ${escapeHtml(categoryLabel)}
+                        </span>
+                    </div>
+
+                    <div class="leading-5 text-gray-800 break-words">
+                        ${escapeHtml(item.description)}
+                    </div>
+                </button>
+            `;
+        }).join('');
+
+        showDropdown();
+    }
+
+    textarea.addEventListener('focus', function () {
+        renderTemplates(this.value);
+    });
+
+    textarea.addEventListener('input', function () {
+        renderTemplates(this.value);
+    });
+
+    dropdown.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+
+        const option = event.target.closest('.rk-template-option');
+
+        if (!option) {
+            return;
+        }
+
+        textarea.value = option.dataset.description || '';
+        hideDropdown();
+
+        setTimeout(() => {
+            textarea.focus();
+        }, 0);
+    });
+
+    document.addEventListener('click', function (event) {
+        if (event.target === textarea || dropdown.contains(event.target)) {
+            return;
+        }
+
+        hideDropdown();
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            hideDropdown();
+        }
     });
 }
 
+document.addEventListener('DOMContentLoaded', function () {
+    setupRkTemplateTextarea('create_description', 'createTemplateDropdown');
+    setupRkTemplateTextarea('edit_description', 'editTemplateDropdown');
 });
 
 </script>

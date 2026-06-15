@@ -6,22 +6,43 @@
     $rkKetuaBasePath = match ($role) {
         'admin' => '/admin/rk-ketua',
         'ketua' => '/ketua/rk-ketua',
+        'kepala' => '/kepala/rk-ketua',
         default => '/rk-ketua',
     };
 
     $projectBasePath = match ($role) {
         'admin' => '/admin/project',
         'ketua' => '/ketua/project',
+        'kepala' => '/kepala/project',
         default => '/project',
     };
 
-    $canManageRkKetua = in_array($role, ['admin', 'ketua']);
+    $canManageRkKetua = in_array($role, ['admin', 'ketua'], true);
+    $isKepala = $role === 'kepala';
+
+    /*
+    |--------------------------------------------------------------------------
+    | RK Ketua Template Picker Options
+    |--------------------------------------------------------------------------
+    | Data ini berasal dari controller ($rkKetuaTemplates) yang mengambil isi
+    | tabel rk_ketua_templates. Disiapkan di @php agar @json di script tetap
+    | sederhana dan tidak menyebabkan parse error Blade.
+    |--------------------------------------------------------------------------
+    */
+    $rkKetuaTemplateOptions = ($rkKetuaTemplates ?? collect())
+        ->map(function ($template) {
+            return [
+                'description' => $template->description,
+                'category' => $template->category,
+            ];
+        })
+        ->values();
 @endphp
 
 <div class="bg-white p-6 rounded-xl shadow">
 
     <!-- ================= HEADER ================= -->
-    <div class="flex justify-between items-center mb-4">
+    <div class="flex flex-col gap-3 md:flex-row md:justify-between md:items-center mb-4">
         <div>
             <h2 class="text-xl font-bold">
                 Rencana Kinerja - Ketua
@@ -30,6 +51,14 @@
             @if($role === 'ketua')
                 <p class="text-sm text-gray-500 mt-1">
                     Menampilkan RK Ketua berdasarkan tim kerja yang kamu pimpin.
+                </p>
+            @elseif($role === 'kepala')
+                <p class="text-sm text-gray-500 mt-1">
+                    Mode monitoring. Menampilkan seluruh RK Ketua, project, IKI, dan progress turunannya.
+                </p>
+            @else
+                <p class="text-sm text-gray-500 mt-1">
+                    Monitoring RK Ketua berdasarkan IKU, project, RK Anggota, IKI, dan Daily Task.
                 </p>
             @endif
         </div>
@@ -44,7 +73,7 @@
                 <button type="button"
                     onclick="openCreateModal()"
                     class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-                    + Add
+                    + Add RK Ketua
                 </button>
             @endif
         </div>
@@ -74,10 +103,13 @@
     @endif
 
     <!-- ================= FILTER ================= -->
-    <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
+    <form id="rkKetuaFilterForm"
+        method="GET"
+        class="grid grid-cols-1 md:grid-cols-6 gap-3 mb-4">
 
         <!-- YEAR -->
         <select name="year"
+            id="yearFilter"
             class="border px-3 py-2 rounded">
             @for($y = date('Y'); $y >= 2020; $y--)
                 <option value="{{ $y }}" {{ (int) $y === (int) $year ? 'selected' : '' }}>
@@ -88,6 +120,7 @@
 
         <!-- IKU -->
         <select name="iku_id"
+            id="ikuFilter"
             class="border px-3 py-2 rounded">
             <option value="">Semua IKU</option>
 
@@ -101,6 +134,7 @@
 
         <!-- TEAM -->
         <select name="team_id"
+            id="teamFilter"
             class="border px-3 py-2 rounded">
             <option value="">Semua Tim</option>
 
@@ -117,17 +151,23 @@
             id="searchInput"
             name="search"
             value="{{ request('search') }}"
-            placeholder="Pencarian..."
+            placeholder="Cari RK Ketua, IKU, tim, project, atau IKI..."
             class="border px-3 py-2 rounded">
 
-        <button class="bg-gray-800 text-white px-4 rounded">
+        <button type="submit"
+            class="bg-gray-800 text-white px-4 rounded">
             Filter
         </button>
+
+        <a href="{{ url($rkKetuaBasePath) }}"
+            class="bg-gray-200 text-center px-4 py-2 rounded hover:bg-gray-300">
+            Reset
+        </a>
     </form>
 
     <!-- ================= TABLE ================= -->
     <div class="overflow-x-auto">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm min-w-[1100px]">
             <thead class="bg-gray-50 border-b">
                 <tr>
                     <th class="text-left p-3">
@@ -142,6 +182,18 @@
                         Tim
                     </th>
 
+                    <th class="text-center p-3">
+                        Project
+                    </th>
+
+                    <th class="text-center p-3">
+                        IKI
+                    </th>
+
+                    <th class="text-center p-3">
+                        Daily Task
+                    </th>
+
                     <th class="text-left p-3">
                         Progress
                     </th>
@@ -154,11 +206,28 @@
 
             <tbody id="rkKetuaTableBody">
             @forelse($rkKetuas as $rk)
+                @php
+                    $projectCount = $rk->project_count ?? $rk->projects->count();
+                    $totalIki = $rk->total_iki_count ?? 0;
+                    $approvedIki = $rk->approved_iki_count ?? 0;
+                    $dailyTaskCount = $rk->daily_task_count ?? 0;
+                    $completedRk = $rk->completed_rk_anggota_count ?? $rk->approved_rk_anggota_count ?? 0;
+                    $totalRkAnggota = $rk->rk_anggota_count ?? 0;
+                @endphp
+
                 <tr class="border-b hover:bg-gray-50" data-id="{{ $rk->id }}">
 
                     <!-- IKU -->
                     <td class="p-3">
-                        {{ $rk->iku->name ?? '-' }}
+                        <div class="font-medium text-gray-900">
+                            {{ $rk->iku->name ?? '-' }}
+                        </div>
+
+                        @if($rk->iku?->year)
+                            <div class="text-xs text-gray-400 mt-1">
+                                Tahun: {{ $rk->iku->year }}
+                            </div>
+                        @endif
                     </td>
 
                     <!-- DESCRIPTION -->
@@ -168,7 +237,49 @@
 
                     <!-- TEAM -->
                     <td class="p-3">
-                        {{ $rk->team->name ?? '-' }}
+                        <div class="font-medium text-gray-900">
+                            {{ $rk->team->name ?? '-' }}
+                        </div>
+
+                        <div class="text-xs text-gray-400 mt-1">
+                            Ketua: {{ $rk->team->leader->name ?? '-' }}
+                        </div>
+                    </td>
+
+                    <!-- PROJECT -->
+                    <td class="p-3 text-center">
+                        <div class="font-semibold text-gray-900">
+                            {{ $projectCount }}
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            project
+                        </div>
+                    </td>
+
+                    <!-- IKI -->
+                    <td class="p-3 text-center">
+                        <div class="font-semibold text-gray-900">
+                            {{ $approvedIki }}/{{ $totalIki }}
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            IKI approved
+                        </div>
+
+                        @if($totalRkAnggota > 0)
+                            <div class="text-xs text-gray-400 mt-1">
+                                RK selesai: {{ $completedRk }}/{{ $totalRkAnggota }}
+                            </div>
+                        @endif
+                    </td>
+
+                    <!-- DAILY TASK -->
+                    <td class="p-3 text-center">
+                        <div class="font-semibold text-gray-900">
+                            {{ $dailyTaskCount }}
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            task
+                        </div>
                     </td>
 
                     <!-- PROGRESS -->
@@ -189,6 +300,11 @@
                             class="text-blue-500 hover:underline">
                             View
                         </button>
+
+                        <a href="{{ url($projectBasePath . '?rk_ketua_id=' . $rk->id) }}"
+                            class="text-purple-600 hover:underline">
+                            Project
+                        </a>
 
                         @if($canManageRkKetua)
                             <button type="button"
@@ -215,7 +331,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" class="text-center py-4 text-gray-500">
+                    <td colspan="8" class="text-center py-4 text-gray-500">
                         Tidak ada data RK Ketua
                     </td>
                 </tr>
@@ -234,7 +350,7 @@
 <!-- ================= CREATE MODAL ================= -->
 @if($canManageRkKetua)
 <div id="modalCreate"
-    class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
 
     <div class="bg-white rounded-2xl w-[680px] max-h-[90vh] overflow-y-auto shadow-xl">
 
@@ -327,20 +443,28 @@
                     Rencana Kinerja Ketua
                 </label>
 
-                <textarea name="description"
-                    required
-                    rows="5"
-                    placeholder="Tulis rencana kinerja ketua..."
-                    class="border w-full p-3 rounded-lg focus:ring focus:ring-green-100 focus:border-green-500"></textarea>
+                <div class="relative">
+                    <textarea id="create_description"
+                        name="description"
+                        required
+                        rows="5"
+                        placeholder="Tulis rencana kinerja ketua atau pilih dari template..."
+                        autocomplete="off"
+                        class="border w-full p-3 rounded-lg focus:ring focus:ring-green-100 focus:border-green-500"></textarea>
+
+                    <div id="createRkKetuaTemplateDropdown"
+                        class="hidden absolute left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-xl border bg-white shadow-xl">
+                    </div>
+                </div>
 
                 <p class="text-xs text-gray-400 mt-1">
-                    Contoh: Menyusun dan mengawal pelaksanaan publikasi statistik sektoral.
+                    Klik kolom ini untuk memilih template RK Ketua dari data Excel yang sudah diimport, atau tetap ketik manual.
                 </p>
             </div>
 
             <!-- INFO -->
             <div class="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-700">
-                RK Ketua akan menjadi dasar pembuatan project. Project nantinya memiliki anggota fleksibel melalui project_members.
+                RK Ketua menjadi dasar pembuatan project. Progress RK Ketua dihitung dari progress project, yang bersumber dari RK Anggota dan IKI.
             </div>
 
             <!-- ACTION -->
@@ -366,7 +490,7 @@
 <!-- ================= EDIT MODAL ================= -->
 @if($canManageRkKetua)
 <div id="modalEdit"
-    class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
 
     <div class="bg-white rounded-2xl w-[680px] max-h-[90vh] overflow-y-auto shadow-xl">
 
@@ -500,9 +624,9 @@
 
 <!-- ================= VIEW MODAL ================= -->
 <div id="modalView"
-    class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
 
-    <div class="bg-white rounded-2xl w-[820px] max-h-[85vh] overflow-y-auto shadow-xl">
+    <div class="bg-white rounded-2xl w-[980px] max-h-[85vh] overflow-y-auto shadow-xl">
 
         <!-- HEADER -->
         <div class="px-6 py-4 border-b flex justify-between items-start">
@@ -512,7 +636,7 @@
                 </h3>
 
                 <p class="text-sm text-gray-500 mt-1">
-                    Detail IKU, tim kerja, progress, dan daftar project dari RK Ketua.
+                    Detail IKU, tim kerja, project, RK Anggota, IKI, Daily Task, dan progress.
                 </p>
             </div>
 
@@ -538,13 +662,138 @@
     </div>
 </div>
 
-
-
 <!-- ================= SCRIPT ================= -->
 <script>
 const RK_KETUA_BASE_PATH = @json($rkKetuaBasePath);
 const PROJECT_BASE_PATH = @json($projectBasePath);
 const CAN_MANAGE_RK_KETUA = @json($canManageRkKetua);
+const RK_KETUA_TEMPLATE_OPTIONS = @json($rkKetuaTemplateOptions);
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function escapeAttribute(value) {
+    return escapeHtml(value).replaceAll('\n', '&#10;');
+}
+
+/*
+|--------------------------------------------------------------------------
+| RK Ketua Template Picker - Create Modal Only
+|--------------------------------------------------------------------------
+| Picker hanya membantu mengisi textarea Create RK Ketua.
+| Tidak mengubah flow edit, view, filter, table, ajax search, atau tombol lain.
+|--------------------------------------------------------------------------
+*/
+function setupRkKetuaCreateTemplatePicker() {
+    const textarea = document.getElementById('create_description');
+    const dropdown = document.getElementById('createRkKetuaTemplateDropdown');
+
+    if (!textarea || !dropdown) {
+        return;
+    }
+
+    function normalizeText(value) {
+        return String(value ?? '').toLowerCase();
+    }
+
+    function hideDropdown() {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+    }
+
+    function renderTemplates(keyword = '') {
+        const search = normalizeText(keyword);
+
+        let templates = RK_KETUA_TEMPLATE_OPTIONS.filter(item => {
+            const description = normalizeText(item.description);
+            const category = normalizeText(item.category);
+
+            if (!search) {
+                return true;
+            }
+
+            return description.includes(search) || category.includes(search);
+        });
+
+        templates = templates.slice(0, 12);
+
+        if (templates.length === 0) {
+            dropdown.innerHTML = `
+                <div class="p-3 text-sm text-gray-400">
+                    Template RK Ketua tidak ditemukan. Kamu tetap bisa mengetik manual.
+                </div>
+            `;
+            dropdown.classList.remove('hidden');
+            return;
+        }
+
+        dropdown.innerHTML = templates.map(item => {
+            return `
+                <button type="button"
+                    class="rk-ketua-template-option block w-full border-b px-4 py-3 text-left text-sm hover:bg-green-50 last:border-b-0"
+                    data-description="${escapeAttribute(item.description)}">
+
+                    <div class="font-semibold text-gray-900 leading-5">
+                        ${escapeHtml(item.description)}
+                    </div>
+
+                    ${item.category ? `
+                        <div class="mt-1 text-xs text-gray-500">
+                            Kategori: ${escapeHtml(item.category)}
+                        </div>
+                    ` : ''}
+                </button>
+            `;
+        }).join('');
+
+        dropdown.classList.remove('hidden');
+    }
+
+    textarea.addEventListener('focus', function () {
+        renderTemplates(this.value);
+    });
+
+    textarea.addEventListener('input', function () {
+        renderTemplates(this.value);
+    });
+
+    dropdown.addEventListener('mousedown', function (event) {
+        const option = event.target.closest('.rk-ketua-template-option');
+
+        if (!option) {
+            return;
+        }
+
+        event.preventDefault();
+
+        textarea.value = option.dataset.description || '';
+        hideDropdown();
+
+        setTimeout(() => {
+            textarea.focus();
+        }, 0);
+    });
+
+    document.addEventListener('click', function (event) {
+        if (event.target === textarea || dropdown.contains(event.target)) {
+            return;
+        }
+
+        hideDropdown();
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            hideDropdown();
+        }
+    });
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -578,6 +827,7 @@ function openViewModal(id){
         })
         .then(data => {
             const projects = data.projects ?? [];
+            const progress = data.progress ?? 0;
 
             const projectHtml = projects.length === 0
                 ? `
@@ -587,12 +837,14 @@ function openViewModal(id){
                 `
                 : `
                     <div class="overflow-x-auto border rounded-xl">
-                        <table class="w-full text-sm">
+                        <table class="w-full text-sm min-w-[900px]">
                             <thead class="bg-gray-50 border-b">
                                 <tr>
                                     <th class="text-left p-3">Project</th>
                                     <th class="text-center p-3">Anggota</th>
-                                    <th class="text-center p-3">RK Approved</th>
+                                    <th class="text-center p-3">RK Anggota</th>
+                                    <th class="text-center p-3">IKI Approved</th>
+                                    <th class="text-center p-3">Daily Task</th>
                                     <th class="text-center p-3">Progress</th>
                                     <th class="text-center p-3">Aksi</th>
                                 </tr>
@@ -601,8 +853,14 @@ function openViewModal(id){
                             <tbody>
                                 ${projects.map(project => `
                                     <tr class="border-b last:border-b-0 hover:bg-gray-50">
-                                        <td class="p-3 font-medium">
-                                            ${project.name ?? '-'}
+                                        <td class="p-3">
+                                            <div class="font-medium text-gray-900">
+                                                ${escapeHtml(project.name ?? '-')}
+                                            </div>
+
+                                            <div class="text-xs text-gray-400 mt-1">
+                                                Status: ${escapeHtml(project.status ?? '-')}
+                                            </div>
                                         </td>
 
                                         <td class="p-3 text-center">
@@ -612,7 +870,42 @@ function openViewModal(id){
                                         </td>
 
                                         <td class="p-3 text-center">
-                                            ${project.approved_rk_count ?? 0}/${project.rk_anggota_count ?? 0}
+                                            <div class="font-semibold text-gray-900">
+                                                ${project.completed_rk_anggota_count ?? 0}/${project.rk_anggota_count ?? 0}
+                                            </div>
+                                            <div class="text-xs text-gray-400">
+                                                RK selesai
+                                            </div>
+                                        </td>
+
+                                        <td class="p-3 text-center">
+                                            <div class="font-semibold text-gray-900">
+                                                ${project.approved_iki_count ?? 0}/${project.total_iki_count ?? 0}
+                                            </div>
+                                            <div class="text-xs text-gray-400">
+                                                IKI approved
+                                            </div>
+
+                                            ${project.submitted_iki_count > 0 ? `
+                                                <div class="text-xs text-blue-600 mt-1">
+                                                    ${project.submitted_iki_count} menunggu review
+                                                </div>
+                                            ` : ''}
+
+                                            ${project.rejected_iki_count > 0 ? `
+                                                <div class="text-xs text-red-600 mt-1">
+                                                    ${project.rejected_iki_count} perlu revisi
+                                                </div>
+                                            ` : ''}
+                                        </td>
+
+                                        <td class="p-3 text-center">
+                                            <div class="font-semibold text-gray-900">
+                                                ${project.daily_task_count ?? 0}
+                                            </div>
+                                            <div class="text-xs text-gray-400">
+                                                task
+                                            </div>
                                         </td>
 
                                         <td class="p-3">
@@ -648,10 +941,10 @@ function openViewModal(id){
                             IKU
                         </div>
                         <div class="font-semibold text-gray-900">
-                            ${data.iku?.name ?? '-'}
+                            ${escapeHtml(data.iku?.name ?? '-')}
                         </div>
                         <div class="text-xs text-gray-400 mt-1">
-                            Tahun: ${data.iku?.year ?? '-'}
+                            Tahun: ${escapeHtml(data.iku?.year ?? '-')}
                         </div>
                     </div>
 
@@ -660,10 +953,10 @@ function openViewModal(id){
                             Tim Kerja
                         </div>
                         <div class="font-semibold text-gray-900">
-                            ${data.team?.name ?? '-'}
+                            ${escapeHtml(data.team?.name ?? '-')}
                         </div>
                         <div class="text-xs text-gray-400 mt-1">
-                            Ketua: ${data.team?.leader?.name ?? '-'}
+                            Ketua: ${escapeHtml(data.team?.leader?.name ?? '-')}
                         </div>
                     </div>
 
@@ -675,40 +968,89 @@ function openViewModal(id){
                         Rencana Kinerja Ketua
                     </div>
                     <div class="font-medium text-gray-900">
-                        ${data.description ?? '-'}
+                        ${escapeHtml(data.description ?? '-')}
+                    </div>
+                </div>
+
+                <!-- PROGRESS -->
+                <div class="mt-4 p-4 rounded-xl bg-green-50 border border-green-100">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-semibold text-green-700">
+                                Progress RK Ketua
+                            </div>
+                            <div class="text-xs text-green-700 mt-1">
+                                Progress dihitung dari rata-rata progress project di bawah RK Ketua ini.
+                            </div>
+                        </div>
+
+                        <div class="md:w-72">
+                            <div class="w-full bg-green-100 rounded h-3">
+                                <div class="bg-green-500 h-3 rounded"
+                                    style="width: ${progress}%">
+                                </div>
+                            </div>
+                            <div class="text-right text-2xl font-bold text-green-700 mt-1">
+                                ${progress}%
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- STATS -->
-                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
 
                     <div class="p-4 rounded-xl bg-blue-50 border border-blue-100">
-                        <div class="text-sm text-blue-600">
-                            Total Project
+                        <div class="text-xs text-blue-600 font-semibold">
+                            Project
                         </div>
                         <div class="text-3xl font-bold text-blue-700 mt-2">
                             ${data.project_count ?? 0}
                         </div>
                     </div>
 
-                    <div class="p-4 rounded-xl bg-green-50 border border-green-100">
-                        <div class="text-sm text-green-600">
-                            Progress Rata-rata
+                    <div class="p-4 rounded-xl bg-purple-50 border border-purple-100">
+                        <div class="text-xs text-purple-600 font-semibold">
+                            RK Anggota
                         </div>
-
-                        <div class="mt-2">
-                            <div class="w-full bg-green-100 rounded h-3">
-                                <div class="bg-green-500 h-3 rounded"
-                                    style="width: ${data.progress ?? 0}%">
-                                </div>
-                            </div>
-
-                            <div class="text-2xl font-bold text-green-700 mt-2">
-                                ${data.progress ?? 0}%
-                            </div>
+                        <div class="text-3xl font-bold text-purple-700 mt-2">
+                            ${data.rk_anggota_count ?? 0}
                         </div>
                     </div>
 
+                    <div class="p-4 rounded-xl bg-indigo-50 border border-indigo-100">
+                        <div class="text-xs text-indigo-600 font-semibold">
+                            Total IKI
+                        </div>
+                        <div class="text-3xl font-bold text-indigo-700 mt-2">
+                            ${data.total_iki_count ?? 0}
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-100">
+                        <div class="text-xs text-emerald-600 font-semibold">
+                            IKI Approved
+                        </div>
+                        <div class="text-3xl font-bold text-emerald-700 mt-2">
+                            ${data.approved_iki_count ?? 0}
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl bg-gray-50 border">
+                        <div class="text-xs text-gray-600 font-semibold">
+                            Daily Task
+                        </div>
+                        <div class="text-3xl font-bold text-gray-700 mt-2">
+                            ${data.daily_task_count ?? 0}
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- INFO -->
+                <div class="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-700">
+                    Approval dilakukan pada level IKI. RK Ketua memantau progress dari Project,
+                    Project memantau RK Anggota, dan RK Anggota memantau IKI serta Daily Task.
                 </div>
 
                 <!-- PROJECT LIST -->
@@ -811,6 +1153,8 @@ function openEditModal(data){
 |--------------------------------------------------------------------------
 */
 document.addEventListener('DOMContentLoaded', function () {
+    setupRkKetuaCreateTemplatePicker();
+
     const teamSelect = document.getElementById('teamSelect');
 
     if (teamSelect) {
@@ -844,116 +1188,272 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <script>
-let timer;
+let rkKetuaSearchTimer = null;
 let rkKetuaSearchData = {};
 
+const rkKetuaFilterForm = document.getElementById('rkKetuaFilterForm');
 const searchInput = document.getElementById('searchInput');
+const yearFilter = document.getElementById('yearFilter');
+const ikuFilter = document.getElementById('ikuFilter');
+const teamFilter = document.getElementById('teamFilter');
 
-if (searchInput) {
-    searchInput.addEventListener('keyup', function() {
+function getRkKetuaFilterParams() {
+    const params = new URLSearchParams();
 
-        clearTimeout(timer);
+    const keyword = searchInput?.value ?? '';
+    const year = yearFilter?.value ?? '';
+    const ikuId = ikuFilter?.value ?? '';
+    const teamId = teamFilter?.value ?? '';
 
-        const keyword = this.value;
-        const year = document.querySelector('[name="year"]')?.value ?? '';
-        const iku_id = document.querySelector('[name="iku_id"]')?.value ?? '';
-        const team_id = document.querySelector('[name="team_id"]')?.value ?? '';
+    if (keyword) {
+        params.set('search', keyword);
+    }
 
-        timer = setTimeout(() => {
+    if (year) {
+        params.set('year', year);
+    }
 
-            fetch(`/rk-ketua/search?search=${encodeURIComponent(keyword)}&year=${year}&iku_id=${iku_id}&team_id=${team_id}`)
-                .then(res => {
-                    if (!res.ok) {
-                        throw new Error('Gagal mengambil data search RK Ketua');
-                    }
+    if (ikuId) {
+        params.set('iku_id', ikuId);
+    }
 
-                    return res.json();
-                })
-                .then(data => {
+    if (teamId) {
+        params.set('team_id', teamId);
+    }
 
-                    const tbody = document.getElementById('rkKetuaTableBody');
-                    tbody.innerHTML = '';
-                    rkKetuaSearchData = {};
+    return params;
+}
 
-                    if (!data || data.length === 0) {
-                        tbody.innerHTML = `
-                            <tr>
-                                <td colspan="5" class="text-center py-4 text-gray-400">
-                                    Data tidak ditemukan
-                                </td>
-                            </tr>
-                        `;
-                        return;
-                    }
+function renderRkKetuaTable(data) {
+    const tbody = document.getElementById('rkKetuaTableBody');
 
-                    data.forEach(rk => {
-                        rkKetuaSearchData[rk.id] = rk;
+    if (!tbody) {
+        return;
+    }
 
-                        const manageButtons = CAN_MANAGE_RK_KETUA ? `
-                            <button type="button"
-                                onclick="openEditModalFromSearch(${rk.id})"
-                                class="text-yellow-500 hover:underline">
-                                Edit
-                            </button>
+    tbody.innerHTML = '';
+    rkKetuaSearchData = {};
 
-                            <form method="POST"
-                                action="${RK_KETUA_BASE_PATH}/${rk.id}"
-                                class="inline"
-                                onsubmit="return confirm('Yakin hapus RK Ketua ini?')">
-                                <input type="hidden" name="_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="_method" value="DELETE">
+    if (!data || data.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-4 text-gray-400">
+                    Data tidak ditemukan
+                </td>
+            </tr>
+        `;
+        return;
+    }
 
-                                <button class="text-red-500 hover:underline">
-                                    Delete
-                                </button>
-                            </form>
-                        ` : '';
+    data.forEach(rk => {
+        rkKetuaSearchData[rk.id] = rk;
 
-                        tbody.innerHTML += `
-                            <tr class="border-b hover:bg-gray-50">
+        const progress = rk.progress ?? 0;
+        const projectCount = rk.project_count ?? 0;
+        const totalIki = rk.total_iki_count ?? 0;
+        const approvedIki = rk.approved_iki_count ?? 0;
+        const dailyTaskCount = rk.daily_task_count ?? 0;
+        const completedRk = rk.completed_rk_anggota_count ?? rk.approved_rk_anggota_count ?? 0;
+        const totalRkAnggota = rk.rk_anggota_count ?? 0;
 
-                                <td class="p-3">
-                                    ${rk.iku?.name ?? '-'}
-                                </td>
+        const manageButtons = CAN_MANAGE_RK_KETUA ? `
+            <button type="button"
+                onclick="openEditModalFromSearch(${rk.id})"
+                class="text-yellow-500 hover:underline">
+                Edit
+            </button>
 
-                                <td class="p-3">
-                                    ${rk.description ?? '-'}
-                                </td>
+            <form method="POST"
+                action="${RK_KETUA_BASE_PATH}/${rk.id}"
+                class="inline"
+                onsubmit="return confirm('Yakin hapus RK Ketua ini?')">
+                <input type="hidden" name="_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="_method" value="DELETE">
 
-                                <td class="p-3">
-                                    ${rk.team?.name ?? '-'}
-                                </td>
+                <button class="text-red-500 hover:underline">
+                    Delete
+                </button>
+            </form>
+        ` : '';
 
-                                <td class="p-3">
-                                    <div class="w-full bg-gray-200 rounded h-2">
-                                        <div class="bg-green-500 h-2 rounded"
-                                            style="width: ${rk.progress ?? 0}%">
-                                        </div>
-                                    </div>
-                                    <small>${rk.progress ?? 0}%</small>
-                                </td>
+        tbody.innerHTML += `
+            <tr class="border-b hover:bg-gray-50" data-id="${rk.id}">
+                <td class="p-3">
+                    <div class="font-medium text-gray-900">
+                        ${escapeHtml(rk.iku?.name ?? '-')}
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1">
+                        Tahun: ${escapeHtml(rk.iku?.year ?? '-')}
+                    </div>
+                </td>
 
-                                <td class="p-3 space-x-2">
-                                    <button type="button"
-                                        onclick="openViewModal(${rk.id})"
-                                        class="text-blue-500 hover:underline">
-                                        View
-                                    </button>
+                <td class="p-3">
+                    ${escapeHtml(rk.description ?? '-')}
+                </td>
 
-                                    ${manageButtons}
-                                </td>
+                <td class="p-3">
+                    <div class="font-medium text-gray-900">
+                        ${escapeHtml(rk.team?.name ?? '-')}
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1">
+                        Ketua: ${escapeHtml(rk.team?.leader?.name ?? '-')}
+                    </div>
+                </td>
 
-                            </tr>
-                        `;
-                    });
+                <td class="p-3 text-center">
+                    <div class="font-semibold text-gray-900">
+                        ${projectCount}
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        project
+                    </div>
+                </td>
 
-                })
-                .catch(err => {
-                    console.error('SEARCH RK KETUA ERROR:', err);
+                <td class="p-3 text-center">
+                    <div class="font-semibold text-gray-900">
+                        ${approvedIki}/${totalIki}
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        IKI approved
+                    </div>
+
+                    ${totalRkAnggota > 0 ? `
+                        <div class="text-xs text-gray-400 mt-1">
+                            RK selesai: ${completedRk}/${totalRkAnggota}
+                        </div>
+                    ` : ''}
+                </td>
+
+                <td class="p-3 text-center">
+                    <div class="font-semibold text-gray-900">
+                        ${dailyTaskCount}
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        task
+                    </div>
+                </td>
+
+                <td class="p-3">
+                    <div class="w-full bg-gray-200 rounded h-2">
+                        <div class="bg-green-500 h-2 rounded"
+                            style="width: ${progress}%">
+                        </div>
+                    </div>
+                    <small>${progress}%</small>
+                </td>
+
+                <td class="p-3 space-x-2">
+                    <button type="button"
+                        onclick="openViewModal(${rk.id})"
+                        class="text-blue-500 hover:underline">
+                        View
+                    </button>
+
+                    <a href="${PROJECT_BASE_PATH}?rk_ketua_id=${rk.id}"
+                        class="text-purple-600 hover:underline">
+                        Project
+                    </a>
+
+                    ${manageButtons}
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function fetchRkKetuaAjax({ pushUrl = false } = {}) {
+    const params = getRkKetuaFilterParams();
+    const queryString = params.toString();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Search URL
+    |--------------------------------------------------------------------------
+    | Tetap memakai endpoint lama /rk-ketua/search agar tidak mengganggu route
+    | yang sudah berjalan.
+    |--------------------------------------------------------------------------
+    */
+    const ajaxUrl = `/rk-ketua/search${queryString ? `?${queryString}` : ''}`;
+
+    const tbody = document.getElementById('rkKetuaTableBody');
+
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-4 text-gray-400">
+                    Memuat data...
+                </td>
+            </tr>
+        `;
+    }
+
+    fetch(ajaxUrl, {
+        headers: {
+            'Accept': 'application/json',
+        },
+    })
+        .then(async res => {
+            if (!res.ok) {
+                const body = await res.text();
+
+                console.error('SEARCH RK KETUA ERROR RESPONSE:', {
+                    status: res.status,
+                    url: res.url,
+                    body: body,
                 });
 
-        }, 400);
+                throw new Error(`Gagal mengambil data RK Ketua. Status: ${res.status}`);
+            }
 
+            return res.json();
+        })
+        .then(data => {
+            renderRkKetuaTable(data);
+
+            if (pushUrl) {
+                const pageUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ''}`;
+                window.history.replaceState({}, '', pageUrl);
+            }
+        })
+        .catch(err => {
+            console.error('SEARCH RK KETUA ERROR:', err);
+
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-red-500">
+                            Gagal memuat data RK Ketua.
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+}
+
+if (searchInput) {
+    searchInput.addEventListener('keyup', function () {
+        clearTimeout(rkKetuaSearchTimer);
+
+        rkKetuaSearchTimer = setTimeout(() => {
+            fetchRkKetuaAjax({ pushUrl: true });
+        }, 400);
+    });
+}
+
+[yearFilter, ikuFilter, teamFilter].forEach(filter => {
+    if (!filter) {
+        return;
+    }
+
+    filter.addEventListener('change', function () {
+        fetchRkKetuaAjax({ pushUrl: true });
+    });
+});
+
+if (rkKetuaFilterForm) {
+    rkKetuaFilterForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        fetchRkKetuaAjax({ pushUrl: true });
     });
 }
 

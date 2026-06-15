@@ -10,7 +10,17 @@ class RkKetua extends Model
         'iku_id',
         'team_id',
         'user_id',
-        'description'
+        'description',
+        'target',
+        'status',
+    ];
+
+    protected $appends = [
+        'progress',
+        'progress_label',
+        'project_count',
+        'rk_anggota_count',
+        'approved_rk_anggota_count',
     ];
 
     public function iku()
@@ -33,21 +43,70 @@ class RkKetua extends Model
         return $this->hasMany(Project::class);
     }
 
-    // 🔥 PROGRESS AUTO
-    public function getProgressAttribute()
-{
-    $rkAnggotas = $this->projects->flatMap->rkAnggotas;
+    /*
+    |--------------------------------------------------------------------------
+    | Progress RK Ketua
+    |--------------------------------------------------------------------------
+    | Flow final:
+    | RK Ketua -> Project -> RK Anggota
+    |
+    | Daily Task tidak masuk progress utama.
+    |
+    | Progress RK Ketua dihitung dari rata-rata progress semua project
+    | di bawah RK Ketua ini.
+    |--------------------------------------------------------------------------
+    */
+    public function getProgressAttribute(): int
+    {
+        $this->loadMissing('projects.rkAnggotas.ikis');
 
-    $total = $rkAnggotas->count();
+        $totalProject = $this->projects->count();
 
-    if ($total === 0) {
-        return 0;
+        if ($totalProject === 0) {
+            return 0;
+        }
+
+        return (int) round(
+            $this->projects->avg(fn ($project) => $project->progress)
+        );
     }
 
-    $approved = $rkAnggotas
-        ->where('status', RkAnggota::STATUS_APPROVED)
-        ->count();
+    public function getProgressLabelAttribute(): string
+    {
+        if ($this->progress <= 0) {
+            return 'Belum Berjalan';
+        }
 
-    return round(($approved / $total) * 100);
-}
+        if ($this->progress >= 100) {
+            return 'Selesai';
+        }
+
+        return 'Berjalan';
+    }
+
+    public function getProjectCountAttribute(): int
+    {
+        $this->loadMissing('projects');
+
+        return $this->projects->count();
+    }
+
+    public function getRkAnggotaCountAttribute(): int
+    {
+        $this->loadMissing('projects.rkAnggotas.ikis');
+
+        return $this->projects
+            ->flatMap(fn ($project) => $project->rkAnggotas)
+            ->count();
+    }
+
+    public function getApprovedRkAnggotaCountAttribute(): int
+    {
+        $this->loadMissing('projects.rkAnggotas.ikis');
+
+        return $this->projects
+            ->flatMap(fn ($project) => $project->rkAnggotas)
+            ->filter(fn ($rk) => $rk->is_completed)
+            ->count();
+    }
 }
